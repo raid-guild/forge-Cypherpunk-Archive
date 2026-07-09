@@ -703,21 +703,24 @@ function VaultTool({
   onAnswer: (value: string) => void;
 }) {
   const [workText, setWorkText] = useState(station.encodedText);
-  const [shift, setShift] = useState(station.config.vaultShift ?? 13);
-  const [rails, setRails] = useState(station.config.vaultRails ?? 3);
-  const [keyword, setKeyword] = useState(station.config.vaultKeyword ?? "");
+  const [activeTool, setActiveTool] = useState<"shift" | "rail" | "keyword" | null>("shift");
+  const [shift, setShift] = useState(13);
+  const [rails, setRails] = useState(3);
+  const [keyword, setKeyword] = useState("");
   const [history, setHistory] = useState<string[]>([]);
-  const caesarStation = stations.find((candidate) => candidate.id === "caesar");
-  const railStation = stations.find((candidate) => candidate.id === "rail-fence");
-  const vigenereStation = stations.find((candidate) => candidate.id === "vigenere");
   const railOptions = [2, 3, 4, 5];
   const normalizedKeyword = compactAnswer(keyword).replace(/[^A-Z]/g, "");
+  const shiftPreview = caesarDecode(workText, shift);
+  const railPreview = railFenceDecode(workText, rails);
+  const railRows = railFenceReconstructionRows(workText, rails);
+  const keywordPreview = normalizedKeyword ? vigenereDecode(workText, normalizedKeyword) : workText;
 
   useEffect(() => {
     setWorkText(station.encodedText);
-    setShift(station.config.vaultShift ?? 13);
-    setRails(station.config.vaultRails ?? 3);
-    setKeyword(station.config.vaultKeyword ?? "");
+    setActiveTool("shift");
+    setShift(13);
+    setRails(3);
+    setKeyword("");
     setHistory([]);
   }, [station]);
 
@@ -748,18 +751,35 @@ function VaultTool({
           ))}
       </div>
 
-      <div className="vault-workbench">
-        <section className="vault-tool-card" aria-label="Shift Door decoder">
-          <div className="vault-tool-card__head">
+      <div className="vault-tool-tray" aria-label="Vault tools">
+        <button
+          className={activeTool === "shift" ? "vault-tool-tab is-active" : "vault-tool-tab"}
+          type="button"
+          onClick={() => setActiveTool("shift")}
+        >
+          Shift Door
+        </button>
+        <button
+          className={activeTool === "rail" ? "vault-tool-tab is-active" : "vault-tool-tab"}
+          type="button"
+          onClick={() => setActiveTool("rail")}
+        >
+          Rail Table
+        </button>
+        <button
+          className={activeTool === "keyword" ? "vault-tool-tab is-active" : "vault-tool-tab"}
+          type="button"
+          onClick={() => setActiveTool("keyword")}
+        >
+          Keyword Terminal
+        </button>
+      </div>
+
+      {activeTool === "shift" && (
+        <section className="vault-tool-dialog" aria-label="Shift Door decoder">
+          <div className="vault-tool-dialog__head">
             <strong>Shift Door</strong>
-            <button
-              className="text-button"
-              type="button"
-              disabled={!caesarStation?.config.shift}
-              onClick={() => setShift(caesarStation?.config.shift ?? shift)}
-            >
-              load preset
-            </button>
+            <span>Try all 25 rotations. The right one should make the next seal look less random.</span>
           </div>
           <label className="range-field">
             <span>Shift: {shift}</span>
@@ -771,22 +791,21 @@ function VaultTool({
               onChange={(event) => setShift(Number(event.target.value))}
             />
           </label>
-          <button className="button" type="button" onClick={() => applyStep(`Shift -${shift}`, caesarDecode(workText, shift))}>
-            Apply shift decode
+          <div className="preview-line">
+            <span>Shift preview</span>
+            <code>{shiftPreview}</code>
+          </div>
+          <button className="button" type="button" onClick={() => applyStep(`Shift -${shift}`, shiftPreview)}>
+            Apply preview
           </button>
         </section>
+      )}
 
-        <section className="vault-tool-card" aria-label="Rail Table decoder">
-          <div className="vault-tool-card__head">
+      {activeTool === "rail" && (
+        <section className="vault-tool-dialog" aria-label="Rail Table decoder">
+          <div className="vault-tool-dialog__head">
             <strong>Rail Table</strong>
-            <button
-              className="text-button"
-              type="button"
-              disabled={!railStation?.config.rails}
-              onClick={() => setRails(railStation?.config.rails ?? rails)}
-            >
-              load preset
-            </button>
+            <span>Choose a rail count, rebuild the rows, then read the zigzag path.</span>
           </div>
           <div className="segmented segmented--compact" aria-label="Vault rail count">
             {railOptions.map((option) => (
@@ -800,22 +819,26 @@ function VaultTool({
               </button>
             ))}
           </div>
-          <button className="button" type="button" onClick={() => applyStep(`${rails}-rail read`, railFenceDecode(workText, rails))}>
-            Apply rail decode
+          <div className="rail-table" aria-label="Vault rail reconstruction">
+            {railRows.map((row, rowIndex) => (
+              <code key={rowIndex}>{row.map((char) => char || ".").join(" ")}</code>
+            ))}
+          </div>
+          <div className="preview-line">
+            <span>Zigzag readout</span>
+            <code>{railPreview}</code>
+          </div>
+          <button className="button" type="button" onClick={() => applyStep(`${rails}-rail read`, railPreview)}>
+            Apply readout
           </button>
         </section>
+      )}
 
-        <section className="vault-tool-card" aria-label="Keyword Terminal decoder">
-          <div className="vault-tool-card__head">
+      {activeTool === "keyword" && (
+        <section className="vault-tool-dialog" aria-label="Keyword Terminal decoder">
+          <div className="vault-tool-dialog__head">
             <strong>Keyword Terminal</strong>
-            <button
-              className="text-button"
-              type="button"
-              disabled={!vigenereStation?.config.keyword}
-              onClick={() => setKeyword(vigenereStation?.config.keyword ?? keyword)}
-            >
-              load preset
-            </button>
+            <span>Use the historical clue to guess the pioneer surname, then inspect the repeated key strip.</span>
           </div>
           <label className="answer-field answer-field--compact">
             <span>Keyword</span>
@@ -825,21 +848,39 @@ function VaultTool({
               placeholder="Pioneer surname"
             />
           </label>
+          <div className="preview-line">
+            <span>Keyword preview</span>
+            <code>{keywordPreview}</code>
+          </div>
+          {normalizedKeyword && (
+            <div className="vigenere-machine" aria-label="Vault Vigenere letter machine">
+              {vigenereTiles(workText, normalizedKeyword).map((tile, index) => (
+                <div className={tile.key ? "vigenere-tile is-active" : "vigenere-tile"} key={`${tile.cipher}-${index}`}>
+                  <span>C</span>
+                  <strong>{tile.cipher}</strong>
+                  <span>K</span>
+                  <strong>{tile.key || "."}</strong>
+                  <span>-{tile.shift}</span>
+                  <strong>{tile.plain || "."}</strong>
+                </div>
+              ))}
+            </div>
+          )}
           <button
             className="button"
             type="button"
             disabled={!normalizedKeyword}
-            onClick={() => applyStep(`${normalizedKeyword} key`, vigenereDecode(workText, normalizedKeyword))}
+            onClick={() => applyStep(`${normalizedKeyword} key`, keywordPreview)}
           >
-            Apply keyword decode
+            Apply preview
           </button>
         </section>
-      </div>
+      )}
 
       {history.length > 0 && (
         <div className="vault-history" aria-label="Vault decode history">
-          {history.map((entry) => (
-            <code key={entry}>{entry}</code>
+          {history.map((entry, index) => (
+            <code key={`${entry}-${index}`}>{entry}</code>
           ))}
         </div>
       )}

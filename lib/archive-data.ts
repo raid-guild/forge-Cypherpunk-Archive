@@ -160,7 +160,13 @@ export function buildArchiveRun(seed: string): ArchiveRun {
     dhConfig.bobSecret
   );
   const vaultPhrase = pick(finalPhrases, rng);
-  const vaultCipher = caesarEncode(railFenceEncode(vigenereEncode(vaultPhrase, keyword), railCount), caesarShift);
+  const vaultShift = pickDifferentNumber(1 + Math.floor(rng() * 25), caesarShift, 1, 25);
+  const vaultRails = railCount === 3 ? 4 : 3;
+  const vaultKeywordClue = pickDifferentKeyword(keywordClues, keyword, rng);
+  const vaultKeyword = vaultKeywordClue.keyword;
+  const vaultAfterKeyword = vigenereEncode(vaultPhrase, vaultKeyword);
+  const vaultAfterRail = railFenceEncode(vaultAfterKeyword, vaultRails);
+  const vaultCipher = caesarEncode(vaultAfterRail, vaultShift);
 
   return {
     seed,
@@ -318,29 +324,33 @@ export function buildArchiveRun(seed: string): ArchiveRun {
         guide: "David Chaum",
         hotspot: { x: 83, y: 73 },
         prompt: "The vault has been sealed with tools you already unlocked. Use the room's ciphers to peel the layers back.",
-        clue: "Three plates mark the lock: a shift wheel, a rail path, and a keyword terminal. The outer plate was sealed last, so it must be opened first.",
+        clue: "Three plates mark the lock: a shift wheel, a rail path, and a keyword terminal. This is a new lock, not a copy of the station settings.",
         encodedText: vaultCipher,
         expectedAnswer: vaultPhrase,
         acceptedAnswers: [vaultPhrase.replaceAll(" ", "")],
         toolLabel:
-          "Try the unlocked tools on the vault text. Reset when a path turns unreadable; transfer the work text when it becomes the final lesson.",
-        config: { vaultShift: caesarShift, vaultRails: railCount, vaultKeyword: keyword },
+          "Open one tool at a time, test a decode, and apply it to the work text. Reset when a path turns unreadable; transfer the work text when it becomes the final lesson.",
+        config: { vaultShift, vaultRails, vaultKeyword },
         hints: [
           {
             speaker: "David Chaum",
-            text: "Cryptography matters when it becomes a tool: private enough to protect people, practical enough to use. Here, reuse the tools you earned.",
+            text: "Cryptography matters when it becomes a tool: private enough to protect people, practical enough to use. Here, use the tool types you earned, not the old answers.",
           },
           {
             speaker: "Archive note",
-            text: "Undo the seals in reverse order. The last method used to encrypt the vault is the first method you should decode.",
+            text: `Start with the Shift Door. After the correct shift, the work text begins with ${vaultAfterRail[0]}.`,
           },
           {
             speaker: "Archive note",
-            text: "The outer seal is the Shift Door. After that, rebuild the Rail Table. The remaining text needs the Keyword Terminal.",
+            text: `Then use the Rail Table. After the correct rail read, the work text begins with ${vaultAfterKeyword.replaceAll(" ", "")[0]}.`,
           },
           {
             speaker: "Archive note",
-            text: `Use shift ${caesarShift}, ${railCount} rails, and keyword ${keyword}.`,
+            text: `The final layer is a Keyword Terminal. ${vaultKeywordClue.clue}`,
+          },
+          {
+            speaker: "Archive note",
+            text: `Full vault settings: shift ${vaultShift}, ${vaultRails} rails, keyword ${vaultKeyword}.`,
           },
         ],
         artifact: {
@@ -371,4 +381,14 @@ function createRng(seed: string) {
 
 function pick<T>(items: T[], rng: () => number) {
   return items[Math.floor(rng() * items.length)];
+}
+
+function pickDifferentNumber(candidate: number, excluded: number, min: number, max: number) {
+  if (candidate !== excluded) return candidate;
+  return candidate === max ? min : candidate + 1;
+}
+
+function pickDifferentKeyword<T extends { keyword: string }>(items: T[], excluded: string, rng: () => number) {
+  const candidates = items.filter((item) => item.keyword !== excluded);
+  return pick(candidates.length ? candidates : items, rng);
 }
