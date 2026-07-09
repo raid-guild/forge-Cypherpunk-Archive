@@ -23,6 +23,12 @@ interface SavedRunState {
   hintCounts: Record<string, number>;
 }
 
+interface VaultHistoryEntry {
+  label: string;
+  before: string;
+  after: string;
+}
+
 const STORAGE_KEY = "cypherpunk-archive-run-v1";
 const DEFAULT_SEED = "archive-demo";
 const dailyCipherEnabled = false;
@@ -707,13 +713,14 @@ function VaultTool({
   const [shift, setShift] = useState(13);
   const [rails, setRails] = useState(3);
   const [keyword, setKeyword] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<VaultHistoryEntry[]>([]);
   const railOptions = [2, 3, 4, 5];
   const normalizedKeyword = compactAnswer(keyword).replace(/[^A-Z]/g, "");
   const shiftPreview = caesarDecode(workText, shift);
   const railPreview = railFenceDecode(workText, rails);
   const railRows = railFenceReconstructionRows(workText, rails);
   const keywordPreview = normalizedKeyword ? vigenereDecode(workText, normalizedKeyword) : workText;
+  const researchFiles = station.config.vaultResearchFiles ?? [];
 
   useEffect(() => {
     setWorkText(station.encodedText);
@@ -725,8 +732,15 @@ function VaultTool({
   }, [station]);
 
   function applyStep(label: string, nextText: string) {
-    setHistory((current) => [`${label}: ${nextText}`, ...current].slice(0, 4));
+    setHistory((current) => [{ label, before: workText, after: nextText }, ...current].slice(0, 6));
     setWorkText(nextText);
+  }
+
+  function undoStep() {
+    const lastStep = history[0];
+    if (!lastStep) return;
+    setWorkText(lastStep.before);
+    setHistory((current) => current.slice(1));
   }
 
   function resetWorkbench() {
@@ -838,7 +852,15 @@ function VaultTool({
         <section className="vault-tool-dialog" aria-label="Keyword Terminal decoder">
           <div className="vault-tool-dialog__head">
             <strong>Keyword Terminal</strong>
-            <span>Use the historical clue to guess the pioneer surname, then inspect the repeated key strip.</span>
+            <span>Read the research files, infer the pioneer surname, then inspect the repeated key strip.</span>
+          </div>
+          <div className="research-files" aria-label="Vault research files">
+            {researchFiles.map((file) => (
+              <a className="research-file" href={file.href} target="_blank" rel="noreferrer" key={file.title}>
+                <strong>{file.title}</strong>
+                <span>{file.body}</span>
+              </a>
+            ))}
           </div>
           <label className="answer-field answer-field--compact">
             <span>Keyword</span>
@@ -880,12 +902,15 @@ function VaultTool({
       {history.length > 0 && (
         <div className="vault-history" aria-label="Vault decode history">
           {history.map((entry, index) => (
-            <code key={`${entry}-${index}`}>{entry}</code>
+            <code key={`${entry.label}-${index}`}>{entry.label}: {entry.after}</code>
           ))}
         </div>
       )}
 
       <div className="modal__actions">
+        <button className="button" type="button" onClick={undoStep} disabled={history.length === 0}>
+          Undo apply
+        </button>
         <button className="button" type="button" onClick={resetWorkbench}>
           Reset vault text
         </button>

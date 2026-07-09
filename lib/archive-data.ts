@@ -13,6 +13,12 @@ export interface LoreArtifact {
   href: string;
 }
 
+export interface VaultResearchFile {
+  title: string;
+  body: string;
+  href: string;
+}
+
 export interface PuzzleStation {
   id: StationId;
   title: string;
@@ -43,6 +49,7 @@ export interface PuzzleStation {
     vaultShift?: number;
     vaultRails?: number;
     vaultKeyword?: string;
+    vaultResearchFiles?: VaultResearchFile[];
   };
 }
 
@@ -93,6 +100,9 @@ const keywordClues = [
     artifactTitle: "David Chaum and Digital Cash",
     artifactBody:
       "David Chaum's work on blind signatures and digital cash helped shape the cypherpunk imagination around privacy-preserving money and identity.",
+    fileTitle: "Blind Signatures and Digital Cash",
+    fileBody:
+      "A private-money file describing blind signatures, anonymous payments, and the DigiCash experiments that influenced later cypherpunk currency designs.",
     href: "https://chaum.com/publications/",
   },
   {
@@ -103,6 +113,9 @@ const keywordClues = [
     artifactTitle: "Hal Finney and PGP",
     artifactBody:
       "Hal Finney helped make strong cryptography practical for real users through PGP 2.0, then became one of Bitcoin's earliest contributors.",
+    fileTitle: "PGP Mail and the First Bitcoin Transfer",
+    fileBody:
+      "A practical-crypto file about PGP 2.0, reusable proof of work, and the recipient of Satoshi's first Bitcoin transaction.",
     href: "https://nakamotoinstitute.org/finney/rpow/",
   },
   {
@@ -113,6 +126,9 @@ const keywordClues = [
     artifactTitle: "Ralph Merkle and Integrity Trees",
     artifactBody:
       "Ralph Merkle contributed foundational public-key ideas and Merkle trees, a practical structure for verifying data integrity.",
+    fileTitle: "Hash Trees and Public-Key Puzzles",
+    fileBody:
+      "A data-integrity file about early public-key puzzles and tree-shaped hash commitments used to verify large sets of records.",
     href: "https://www.merkle.com/papers/Protocols.pdf",
   },
   {
@@ -123,6 +139,9 @@ const keywordClues = [
     artifactTitle: "John Gilmore and the Cypherpunks",
     artifactBody:
       "John Gilmore helped build cypherpunk infrastructure and defended strong cryptography as a tool for privacy and speech.",
+    fileTitle: "Mailing Lists, Free Speech, and Backdoors",
+    fileBody:
+      "A movement-history file about the Cypherpunks mailing list, EFF advocacy, and resistance to government backdoors in cryptography.",
     href: "https://www.eff.org/about/history",
   },
 ];
@@ -198,7 +217,14 @@ export function buildArchiveRun(seed: string): ArchiveRun {
   const vaultCipher = caesarEncode(vaultAfterRail, vaultShift);
   const shiftAcrostic = makeAcrostic(vaultAfterRail, rng);
   const railAcrostic = makeAcrostic(vaultAfterKeyword, rng);
-  const keywordAcrostic = makeAcrostic(vaultKeyword, rng, Math.min(6, vaultKeyword.length));
+  const vaultResearchFiles = shuffle(
+    keywordClues.map((clue) => ({
+      title: clue.fileTitle,
+      body: clue.fileBody,
+      href: clue.href,
+    })),
+    rng
+  );
 
   return {
     seed,
@@ -362,7 +388,7 @@ export function buildArchiveRun(seed: string): ArchiveRun {
         acceptedAnswers: [vaultPhrase.replaceAll(" ", "")],
         toolLabel:
           "Open one tool at a time, test a decode, and apply it to the work text. Reset when a path turns unreadable; transfer the work text when it becomes the final lesson.",
-        config: { vaultShift, vaultRails, vaultKeyword },
+        config: { vaultShift, vaultRails, vaultKeyword, vaultResearchFiles },
         hints: [
           {
             speaker: "David Chaum",
@@ -378,7 +404,7 @@ export function buildArchiveRun(seed: string): ArchiveRun {
           },
           {
             speaker: "Archive note",
-            text: `The final layer is a Keyword Terminal. This plaque points at the key: "${keywordAcrostic.phrase}". ${vaultKeywordClue.clue}`,
+            text: `The final layer is a Keyword Terminal. Search the vault research files for "${vaultKeywordClue.fileTitle}" and use the associated pioneer surname as the key.`,
           },
           {
             speaker: "Archive note",
@@ -423,6 +449,15 @@ function pickDifferentNumber(candidate: number, excluded: number, min: number, m
 function pickDifferentKeyword<T extends { keyword: string }>(items: T[], excluded: string, rng: () => number) {
   const candidates = items.filter((item) => item.keyword !== excluded);
   return pick(candidates.length ? candidates : items, rng);
+}
+
+function shuffle<T>(items: T[], rng: () => number) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(rng() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
 }
 
 function makeAcrostic(source: string, rng: () => number, length = 3) {
