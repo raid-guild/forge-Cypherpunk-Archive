@@ -75,19 +75,21 @@ interface DailyApiResult {
   leaderboard?: DailyLeaderboard;
 }
 
-const STORAGE_KEY = "cypherpunk-archive-run-v1";
 const DEFAULT_SEED = "archive-demo";
+const EMPTY_SOLVED: Partial<Record<StationId, boolean>> = {};
+const EMPTY_LEADERBOARD: DailyLeaderboard = [];
+const STORAGE_KEY = "cypherpunk-archive-run-v1";
 
 export default function ArchiveRoom({
   handle,
   authenticated = false,
   mode = "archive",
   initialSeed = DEFAULT_SEED,
-  initialSolved = {},
+  initialSolved = EMPTY_SOLVED,
   toolUnlocks,
   dailyDate,
   dailyAttempt,
-  leaderboard = [],
+  leaderboard = EMPTY_LEADERBOARD,
   streak,
 }: ArchiveRoomProps) {
   const [seed, setSeed] = useState(initialSeed);
