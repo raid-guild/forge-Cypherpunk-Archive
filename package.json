@@ -1,0 +1,30 @@
+{
+  "name": "cypherpunk-archive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "test": "tsx --test tests/ciphers.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "iron-session": "^8.0.4",
+    "jose": "^5.9.6",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.7.0"
+  }
+}
