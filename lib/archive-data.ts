@@ -143,6 +143,35 @@ const finalPhrases = [
   "CIPHERS TEACH TRUST",
 ];
 
+const acrosticWords: Record<string, string[]> = {
+  A: ["Always", "Archive", "Anonymous", "Algebra", "Agents"],
+  B: ["Be", "Blind", "Build", "Broadcast", "Between"],
+  C: ["Cryptic", "Cipher", "Code", "Carry", "Chaum"],
+  D: ["Defend", "Decode", "Digital", "Door", "Diffie"],
+  E: ["Every", "Exchange", "Encode", "Entropy", "Encrypt"],
+  F: ["Find", "Finney", "Freedom", "Follow", "Forge"],
+  G: ["Guard", "Gilmore", "Graph", "Guess", "Gateway"],
+  H: ["Hide", "Hash", "Hellman", "Hold", "Handshake"],
+  I: ["Inside", "Integrity", "Inspect", "Invisible", "Index"],
+  J: ["Join", "Jumble", "Judge", "Journey", "Justify"],
+  K: ["Keep", "Key", "Known", "Kernel", "Knock"],
+  L: ["Layer", "Lock", "Ledger", "Listen", "Link"],
+  M: ["Merkle", "Message", "Mask", "Move", "Map"],
+  N: ["Never", "Network", "Notice", "Noise", "Name"],
+  O: ["Open", "Order", "Observe", "Obscure", "Outer"],
+  P: ["Private", "Public", "Proof", "Puzzle", "Protect"],
+  Q: ["Question", "Quiet", "Quorum", "Queue", "Quilt"],
+  R: ["Rotate", "Rail", "Read", "Recover", "Resist"],
+  S: ["Secret", "Shift", "Signal", "Speech", "Seal"],
+  T: ["Trust", "Trace", "Tool", "Tree", "Terminal"],
+  U: ["Unseal", "Undo", "Unknown", "Use", "Unlink"],
+  V: ["Vault", "Verify", "Vigenere", "Voice", "Value"],
+  W: ["Wheel", "Watch", "Write", "Whisper", "Work"],
+  X: ["Xor", "Xray", "Xmark", "Xeno", "Xaxis"],
+  Y: ["Yield", "Your", "Yoke", "Yonder", "Yearn"],
+  Z: ["Zigzag", "Zero", "Zone", "Zip", "Zeal"],
+};
+
 export function buildArchiveRun(seed: string): ArchiveRun {
   const rng = createRng(seed);
   const caesarPlain = pick(caesarPhrases, rng);
@@ -167,6 +196,9 @@ export function buildArchiveRun(seed: string): ArchiveRun {
   const vaultAfterKeyword = vigenereEncode(vaultPhrase, vaultKeyword);
   const vaultAfterRail = railFenceEncode(vaultAfterKeyword, vaultRails);
   const vaultCipher = caesarEncode(vaultAfterRail, vaultShift);
+  const shiftAcrostic = makeAcrostic(vaultAfterRail, rng);
+  const railAcrostic = makeAcrostic(vaultAfterKeyword, rng);
+  const keywordAcrostic = makeAcrostic(vaultKeyword, rng, Math.min(6, vaultKeyword.length));
 
   return {
     seed,
@@ -338,19 +370,19 @@ export function buildArchiveRun(seed: string): ArchiveRun {
           },
           {
             speaker: "Archive note",
-            text: `Start with the Shift Door. After the correct shift, the work text begins with ${vaultAfterRail[0]}.`,
+            text: `Start with the Shift Door. The next seal begins where this margin phrase points: "${shiftAcrostic.phrase}".`,
           },
           {
             speaker: "Archive note",
-            text: `Then use the Rail Table. After the correct rail read, the work text begins with ${vaultAfterKeyword.replaceAll(" ", "")[0]}.`,
+            text: `Then use the Rail Table. Its readout begins where this note points: "${railAcrostic.phrase}".`,
           },
           {
             speaker: "Archive note",
-            text: `The final layer is a Keyword Terminal. ${vaultKeywordClue.clue}`,
+            text: `The final layer is a Keyword Terminal. This plaque points at the key: "${keywordAcrostic.phrase}". ${vaultKeywordClue.clue}`,
           },
           {
             speaker: "Archive note",
-            text: `Full vault settings: shift ${vaultShift}, ${vaultRails} rails, keyword ${vaultKeyword}.`,
+            text: `Direct reveal: after Shift Door starts with ${shiftAcrostic.target}, after Rail Table starts with ${railAcrostic.target}, final keyword is ${vaultKeyword}. Settings: shift ${vaultShift}, ${vaultRails} rails.`,
           },
         ],
         artifact: {
@@ -391,4 +423,13 @@ function pickDifferentNumber(candidate: number, excluded: number, min: number, m
 function pickDifferentKeyword<T extends { keyword: string }>(items: T[], excluded: string, rng: () => number) {
   const candidates = items.filter((item) => item.keyword !== excluded);
   return pick(candidates.length ? candidates : items, rng);
+}
+
+function makeAcrostic(source: string, rng: () => number, length = 3) {
+  const target = source.replace(/[^A-Z]/g, "").slice(0, length);
+  const words = target.split("").map((letter) => pick(acrosticWords[letter] ?? [letter], rng));
+  return {
+    target,
+    phrase: words.join(" "),
+  };
 }
