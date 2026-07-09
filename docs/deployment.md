@@ -28,11 +28,15 @@ Portal launch support should set:
 
 ```text
 SESSION_SECRET=<32+ character secret>
-MODULE_LAUNCH_SECRET=<shared Portal module launch secret>
-PORTAL_ISSUER=<Portal JWT issuer>
-MODULE_SLUG=<Portal module slug>
+PORTAL_MODULE_LAUNCH_SECRET=<shared Portal module launch secret>
+PORTAL_MODULE_AUDIENCE=cypherpunk-archive
+PORTAL_MODULE_SLUG=cypherpunk-archive
+PORTAL_MODULE_ISSUER=https://portal.raidguild.org
+APP_PUBLIC_URL=https://cypherpunk-archive-production.up.railway.app
 PORTAL_MODULES_URL=https://portal.raidguild.org/modules
 ```
+
+`PORTAL_MODULE_ALLOWED_ISSUERS` can be used instead of `PORTAL_MODULE_ISSUER` when multiple comma-separated Portal issuers are valid.
 
 ## Storage
 

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { getOptionalSession, portalModulesUrl } from "@/lib/session";
+import { getCurrentSession, portalModulesUrl } from "@/lib/portal-session";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
-  const session = await getOptionalSession();
+  const session = await getCurrentSession();
   return NextResponse.json({
-    authenticated: Boolean(session.playerId),
-    playerId: session.playerId ?? null,
-    handle: session.handle ?? null,
+    authenticated: session.authenticated,
+    playerId: session.authenticated ? session.portalUserID : null,
+    handle: session.authenticated ? session.handle : null,
     picture: session.picture ?? null,
     roles: session.roles ?? [],
     portalUrl: portalModulesUrl(),

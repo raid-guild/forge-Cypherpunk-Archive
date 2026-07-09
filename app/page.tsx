@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { getOptionalSession, portalModulesUrl } from "@/lib/session";
+import { getCurrentSession, portalModulesUrl } from "@/lib/portal-session";
 
 export const dynamic = "force-dynamic";
 
 export default async function StartPage() {
-  const session = await getOptionalSession();
+  const session = await getCurrentSession();
 
   return (
     <main className="screen start-screen">
@@ -27,7 +27,7 @@ export default async function StartPage() {
       </section>
 
       <p className="muted">
-        {session.handle ? `Portal session: ${session.handle}` : "Anonymous local play is enabled."}
+        {session.authenticated ? `Portal session: ${session.handle}` : "Anonymous local play is enabled."}
       </p>
     </main>
   );
