@@ -94,16 +94,16 @@
 ## Phase 7 - Daily Vault, Leaderboard, and Streaks
 
 - [x] Define daily seed format direction: shared `daily-YYYY-MM-DD`.
-- [ ] Create daily challenge generator using existing cipher engines.
-- [ ] Add daily challenge route/view.
-- [ ] Gate daily tools by authenticated station completions.
-- [ ] Allow anonymous Daily Vault play without leaderboard/streak credit.
-- [ ] Add `daily_attempts` table.
-- [ ] Add server-side daily answer validation.
-- [ ] Track daily `started_at`, `solved_at`, `viewed_reveal_at`, hint count, and wrong attempts.
-- [ ] Mark full/direct reveal hints with a scoring-disqualifying flag.
-- [ ] Ensure normal hints do not disqualify daily credit.
-- [ ] Add daily credit rule: solved and no viewed reveal.
-- [ ] Add leaderboard API and UI for credited authenticated solves.
-- [ ] Add streak calculation for credited daily solves.
+- [x] Create daily challenge generator using existing cipher engines.
+- [x] Add daily challenge route/view.
+- [x] Gate daily tools by authenticated station completions.
+- [x] Allow anonymous Daily Vault play without leaderboard/streak credit.
+- [x] Add `daily_attempts` table.
+- [x] Add server-side daily answer validation.
+- [x] Track daily `started_at`, `solved_at`, `viewed_reveal_at`, hint count, and wrong attempts.
+- [x] Mark full/direct reveal hints with a scoring-disqualifying flag.
+- [x] Ensure normal hints do not disqualify daily credit.
+- [x] Add daily credit rule: solved and no viewed reveal.
+- [x] Add leaderboard API and UI for credited authenticated solves.
+- [x] Add streak calculation for credited daily solves.
 - [ ] Add shareable result format.

@@ -57,6 +57,24 @@ interface VaultHistoryEntry {
   after: string;
 }
 
+type DailyAttemptState = NonNullable<ArchiveRoomProps["dailyAttempt"]>;
+type DailyLeaderboard = NonNullable<ArchiveRoomProps["leaderboard"]>;
+type DailyStreak = ArchiveRoomProps["streak"];
+
+interface DailyAttemptRecord {
+  solved_at: string | null;
+  viewed_reveal_at: string | null;
+  hint_count: number;
+  wrong_attempts: number;
+}
+
+interface DailyApiResult {
+  attempt?: DailyAttemptRecord;
+  credited?: boolean;
+  streak?: DailyStreak;
+  leaderboard?: DailyLeaderboard;
+}
+
 const STORAGE_KEY = "cypherpunk-archive-run-v1";
 const DEFAULT_SEED = "archive-demo";
 
@@ -79,6 +97,8 @@ export default function ArchiveRoom({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [hintCounts, setHintCounts] = useState<Record<string, number>>({});
   const [dailyState, setDailyState] = useState(dailyAttempt);
+  const [dailyLeaderboard, setDailyLeaderboard] = useState(leaderboard);
+  const [dailyStreak, setDailyStreak] = useState(streak);
 
   const run = useMemo(() => buildArchiveRun(seed), [seed]);
   const visibleStations = mode === "daily" ? run.stations.filter((station) => station.id === "vault") : run.stations;
@@ -102,6 +122,8 @@ export default function ArchiveRoom({
       setSeed(initialSeed);
       setSolved({ ...initialSolved });
       setDailyState(dailyAttempt);
+      setDailyLeaderboard(leaderboard);
+      setDailyStreak(streak);
       if (!authenticated) {
         const saved = loadSavedRun();
         setLocalToolUnlocks(saved?.solved ?? {});
@@ -120,7 +142,7 @@ export default function ArchiveRoom({
 
     setSeed(initialSeed === DEFAULT_SEED ? `archive-${new Date().toISOString().slice(0, 10)}` : initialSeed);
     setSolved({ ...initialSolved });
-  }, [authenticated, dailyAttempt, initialSeed, mode]);
+  }, [authenticated, dailyAttempt, initialSeed, leaderboard, mode, streak]);
 
   useEffect(() => {
     setSolved((current) => ({ ...current, ...initialSolved }));
@@ -178,10 +200,15 @@ export default function ArchiveRoom({
     }));
 
     if (mode !== "daily" || station.id !== "vault") return;
-    void fetch("/api/daily/hint", { method: "POST" });
+    if (authenticated) {
+      setDailyState((current) =>
+        current ? { ...current, hintCount: Math.max(current.hintCount, nextHintCount) } : current
+      );
+    }
+    void updateDailyFromRequest(fetch("/api/daily/hint", { method: "POST" }));
     if (nextHintCount >= station.hints.length) {
       setDailyState((current) => current ? { ...current, viewedReveal: true, credited: false } : current);
-      void fetch("/api/daily/reveal", { method: "POST" });
+      void updateDailyFromRequest(fetch("/api/daily/reveal", { method: "POST" }));
     }
   }
 
@@ -195,30 +222,22 @@ export default function ArchiveRoom({
   }
 
   async function submitDailyAnswer(answer: string) {
-    const response = await fetch("/api/daily/submit", {
+    await updateDailyFromRequest(fetch("/api/daily/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answer }),
-    }).catch(() => null);
+    }));
+  }
+
+  async function updateDailyFromRequest(request: Promise<Response>) {
+    const response = await request.catch(() => null);
     if (!response?.ok) return;
-    const result = (await response.json()) as {
-      attempt?: {
-        solved_at: string | null;
-        viewed_reveal_at: string | null;
-        hint_count: number;
-        wrong_attempts: number;
-      };
-      credited?: boolean;
-    };
+    const result = (await response.json()) as DailyApiResult;
     if (result.attempt) {
-      setDailyState({
-        solved: Boolean(result.attempt.solved_at),
-        viewedReveal: Boolean(result.attempt.viewed_reveal_at),
-        credited: Boolean(result.credited),
-        hintCount: result.attempt.hint_count,
-        wrongAttempts: result.attempt.wrong_attempts,
-      });
+      setDailyState(toDailyAttemptState(result.attempt, result.credited));
     }
+    if (result.leaderboard) setDailyLeaderboard(result.leaderboard);
+    if (result.streak) setDailyStreak(result.streak);
   }
 
   return (
@@ -308,8 +327,8 @@ export default function ArchiveRoom({
         <DailyStatus
           authenticated={authenticated}
           dailyState={dailyState}
-          leaderboard={leaderboard}
-          streak={streak}
+          leaderboard={dailyLeaderboard}
+          streak={dailyStreak}
           toolUnlocks={effectiveToolUnlocks}
         />
       )}
@@ -325,6 +344,18 @@ export default function ArchiveRoom({
       )}
     </main>
   );
+}
+
+function toDailyAttemptState(attempt: DailyAttemptRecord, credited?: boolean): DailyAttemptState {
+  const solved = Boolean(attempt.solved_at);
+  const viewedReveal = Boolean(attempt.viewed_reveal_at);
+  return {
+    solved,
+    viewedReveal,
+    credited: credited ?? Boolean(solved && !viewedReveal),
+    hintCount: attempt.hint_count,
+    wrongAttempts: attempt.wrong_attempts,
+  };
 }
 
 function StationProp({ id, solved, locked }: { id: StationId; solved: boolean; locked: boolean }) {
@@ -368,15 +399,24 @@ function DailyStatus({
   toolUnlocks: Partial<Record<StationId, boolean>>;
 }) {
   const toolStatus = [
-    { id: "caesar" as const, label: "Shift Door" },
-    { id: "rail-fence" as const, label: "Rail Table" },
-    { id: "vigenere" as const, label: "Keyword Terminal" },
+    { id: "caesar" as const, label: "Shift Door", station: "Caesar station" },
+    { id: "rail-fence" as const, label: "Rail Table", station: "Rail station" },
+    { id: "vigenere" as const, label: "Keyword Terminal", station: "Vigenere station" },
   ];
 
   return (
     <section className="daily-panel" aria-label="Daily vault status">
-      <div>
+      <div className="daily-panel__head">
         <h2>Daily Status</h2>
+        <strong className={dailyState?.credited ? "daily-badge daily-badge--credit" : "daily-badge"}>
+          {dailyState?.solved
+            ? dailyState.credited
+              ? "Credited"
+              : "Assisted"
+            : dailyState?.viewedReveal
+              ? "Reveal viewed"
+              : "In progress"}
+        </strong>
         <p className="muted">
           {authenticated
             ? dailyState?.solved
@@ -388,10 +428,17 @@ function DailyStatus({
         </p>
       </div>
 
+      <div className="daily-stats">
+        <span>Hints: {dailyState?.hintCount ?? 0}</span>
+        <span>Misses: {dailyState?.wrongAttempts ?? 0}</span>
+        <span>{dailyState?.viewedReveal ? "Reveal viewed" : "Reveal unused"}</span>
+      </div>
+
       <div className="tool-unlocks">
         {toolStatus.map((tool) => (
           <span className={toolUnlocks[tool.id] ? "tool-unlock is-open" : "tool-unlock"} key={tool.id}>
-            {tool.label}
+            <strong>{tool.label}</strong>
+            <small>{toolUnlocks[tool.id] ? "Unlocked" : `Solve ${tool.station}`}</small>
           </span>
         ))}
       </div>

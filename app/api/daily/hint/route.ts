@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { dailyDate } from "@/lib/daily";
-import { recordDailyHint, upsertUser } from "@/lib/db";
+import { getLeaderboard, getOrCreateDailyAttempt, getStreak, recordDailyHint, upsertUser } from "@/lib/db";
 import { getCurrentSession } from "@/lib/portal-session";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,12 @@ export async function POST() {
   }
 
   upsertUser(session);
-  recordDailyHint(session.portalUserID, dailyDate());
-  return NextResponse.json({ authenticated: true });
+  const date = dailyDate();
+  recordDailyHint(session.portalUserID, date);
+  return NextResponse.json({
+    authenticated: true,
+    attempt: getOrCreateDailyAttempt(session.portalUserID, date),
+    streak: getStreak(session.portalUserID, date),
+    leaderboard: getLeaderboard(date),
+  });
 }
