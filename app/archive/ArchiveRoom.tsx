@@ -317,7 +317,6 @@ function PuzzlePanel({
             station={station}
             stations={stations}
             solvedMap={solvedMap}
-            answer={answer}
             solved={solved}
             onAnswer={onAnswer}
           />
@@ -367,14 +366,12 @@ function StationTool({
   station,
   stations,
   solvedMap,
-  answer,
   solved,
   onAnswer,
 }: {
   station: PuzzleStation;
   stations: PuzzleStation[];
   solvedMap: Record<string, boolean>;
-  answer: string;
   solved: boolean;
   onAnswer: (value: string) => void;
 }) {
@@ -395,8 +392,6 @@ function StationTool({
       station={station}
       stations={stations}
       solvedMap={solvedMap}
-      answer={answer}
-      solved={solved}
       onAnswer={onAnswer}
     />
   );
@@ -700,33 +695,49 @@ function VaultTool({
   station,
   stations,
   solvedMap,
-  answer,
-  solved,
   onAnswer,
 }: {
   station: PuzzleStation;
   stations: PuzzleStation[];
   solvedMap: Record<string, boolean>;
-  answer: string;
-  solved: boolean;
   onAnswer: (value: string) => void;
 }) {
-  const pieces = station.config.vaultPieces ?? [];
+  const [workText, setWorkText] = useState(station.encodedText);
+  const [shift, setShift] = useState(station.config.vaultShift ?? 13);
+  const [rails, setRails] = useState(station.config.vaultRails ?? 3);
+  const [keyword, setKeyword] = useState(station.config.vaultKeyword ?? "");
+  const [history, setHistory] = useState<string[]>([]);
+  const caesarStation = stations.find((candidate) => candidate.id === "caesar");
+  const railStation = stations.find((candidate) => candidate.id === "rail-fence");
+  const vigenereStation = stations.find((candidate) => candidate.id === "vigenere");
+  const railOptions = [2, 3, 4, 5];
+  const normalizedKeyword = compactAnswer(keyword).replace(/[^A-Z]/g, "");
+
+  useEffect(() => {
+    setWorkText(station.encodedText);
+    setShift(station.config.vaultShift ?? 13);
+    setRails(station.config.vaultRails ?? 3);
+    setKeyword(station.config.vaultKeyword ?? "");
+    setHistory([]);
+  }, [station]);
+
+  function applyStep(label: string, nextText: string) {
+    setHistory((current) => [`${label}: ${nextText}`, ...current].slice(0, 4));
+    setWorkText(nextText);
+  }
+
+  function resetWorkbench() {
+    setWorkText(station.encodedText);
+    setHistory([]);
+  }
 
   return (
     <div className="tool-stack">
-      <div className="vault-pieces">
-        {pieces.map((piece) => (
-          <button
-            key={piece}
-            className="vault-piece"
-            type="button"
-            onClick={() => onAnswer([answer, piece].filter(Boolean).join(" "))}
-          >
-            {piece}
-          </button>
-        ))}
+      <div className="preview-line">
+        <span>Vault work text</span>
+        <code>{workText}</code>
       </div>
+
       <div className="artifact-mini">
         {stations
           .filter((candidate) => candidate.id !== "vault")
@@ -736,9 +747,111 @@ function VaultTool({
             </span>
           ))}
       </div>
-      <button className="button" type="button" onClick={() => onAnswer(pieces.join(" "))}>
-        Assemble phrase
-      </button>
+
+      <div className="vault-workbench">
+        <section className="vault-tool-card" aria-label="Shift Door decoder">
+          <div className="vault-tool-card__head">
+            <strong>Shift Door</strong>
+            <button
+              className="text-button"
+              type="button"
+              disabled={!caesarStation?.config.shift}
+              onClick={() => setShift(caesarStation?.config.shift ?? shift)}
+            >
+              load preset
+            </button>
+          </div>
+          <label className="range-field">
+            <span>Shift: {shift}</span>
+            <input
+              type="range"
+              min="1"
+              max="25"
+              value={shift}
+              onChange={(event) => setShift(Number(event.target.value))}
+            />
+          </label>
+          <button className="button" type="button" onClick={() => applyStep(`Shift -${shift}`, caesarDecode(workText, shift))}>
+            Apply shift decode
+          </button>
+        </section>
+
+        <section className="vault-tool-card" aria-label="Rail Table decoder">
+          <div className="vault-tool-card__head">
+            <strong>Rail Table</strong>
+            <button
+              className="text-button"
+              type="button"
+              disabled={!railStation?.config.rails}
+              onClick={() => setRails(railStation?.config.rails ?? rails)}
+            >
+              load preset
+            </button>
+          </div>
+          <div className="segmented segmented--compact" aria-label="Vault rail count">
+            {railOptions.map((option) => (
+              <button
+                key={option}
+                className={option === rails ? "segmented__button segmented__button--active" : "segmented__button"}
+                type="button"
+                onClick={() => setRails(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+          <button className="button" type="button" onClick={() => applyStep(`${rails}-rail read`, railFenceDecode(workText, rails))}>
+            Apply rail decode
+          </button>
+        </section>
+
+        <section className="vault-tool-card" aria-label="Keyword Terminal decoder">
+          <div className="vault-tool-card__head">
+            <strong>Keyword Terminal</strong>
+            <button
+              className="text-button"
+              type="button"
+              disabled={!vigenereStation?.config.keyword}
+              onClick={() => setKeyword(vigenereStation?.config.keyword ?? keyword)}
+            >
+              load preset
+            </button>
+          </div>
+          <label className="answer-field answer-field--compact">
+            <span>Keyword</span>
+            <input
+              value={normalizedKeyword}
+              onChange={(event) => setKeyword(event.target.value.toUpperCase())}
+              placeholder="Pioneer surname"
+            />
+          </label>
+          <button
+            className="button"
+            type="button"
+            disabled={!normalizedKeyword}
+            onClick={() => applyStep(`${normalizedKeyword} key`, vigenereDecode(workText, normalizedKeyword))}
+          >
+            Apply keyword decode
+          </button>
+        </section>
+      </div>
+
+      {history.length > 0 && (
+        <div className="vault-history" aria-label="Vault decode history">
+          {history.map((entry) => (
+            <code key={entry}>{entry}</code>
+          ))}
+        </div>
+      )}
+
+      <div className="modal__actions">
+        <button className="button" type="button" onClick={resetWorkbench}>
+          Reset vault text
+        </button>
+        <button className="button" type="button" onClick={() => onAnswer(workText)}>
+          Transfer work text
+        </button>
+      </div>
     </div>
   );
 }

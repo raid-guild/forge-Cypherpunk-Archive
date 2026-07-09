@@ -806,6 +806,54 @@ code {
   color: var(--green);
 }
 
+.vault-workbench {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vault-tool-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  border: 1px solid rgba(244, 234, 216, 0.16);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(8, 9, 12, 0.46);
+}
+
+.vault-tool-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vault-tool-card__head strong {
+  color: var(--gold);
+}
+
+.vault-tool-card .button {
+  width: 100%;
+}
+
+.segmented--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.vault-history {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(105, 212, 143, 0.24);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(105, 212, 143, 0.08);
+}
+
+.vault-history code {
+  color: var(--green);
+}
+
 .hint {
   display: grid;
   gap: 6px;
@@ -885,6 +933,10 @@ code {
   }
 
   .public-private-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vault-workbench {
     grid-template-columns: 1fr;
   }
 

@@ -40,7 +40,9 @@ export interface PuzzleStation {
     alicePublic?: number;
     bobPublic?: number;
     sharedSecret?: number;
-    vaultPieces?: string[];
+    vaultShift?: number;
+    vaultRails?: number;
+    vaultKeyword?: string;
   };
 }
 
@@ -158,6 +160,7 @@ export function buildArchiveRun(seed: string): ArchiveRun {
     dhConfig.bobSecret
   );
   const vaultPhrase = pick(finalPhrases, rng);
+  const vaultCipher = caesarEncode(railFenceEncode(vigenereEncode(vaultPhrase, keyword), railCount), caesarShift);
 
   return {
     seed,
@@ -314,23 +317,30 @@ export function buildArchiveRun(seed: string): ArchiveRun {
         difficulty: "medium",
         guide: "David Chaum",
         hotspot: { x: 83, y: 73 },
-        prompt: "The vault phrase is assembled from the archive's recovered artifacts.",
-        clue: "The final answer is not another cipher. It is the lesson the solved stations have been pointing toward.",
-        encodedText: "Review the solved stations and submit the final phrase.",
+        prompt: "The vault has been sealed with tools you already unlocked. Use the room's ciphers to peel the layers back.",
+        clue: "Three plates mark the lock: a shift wheel, a rail path, and a keyword terminal. The outer plate was sealed last, so it must be opened first.",
+        encodedText: vaultCipher,
         expectedAnswer: vaultPhrase,
         acceptedAnswers: [vaultPhrase.replaceAll(" ", "")],
-        toolLabel: "Use the collected lesson fragments as a plain phrase.",
-        config: {
-          vaultPieces: vaultPhrase.split(" "),
-        },
+        toolLabel:
+          "Try the unlocked tools on the vault text. Reset when a path turns unreadable; transfer the work text when it becomes the final lesson.",
+        config: { vaultShift: caesarShift, vaultRails: railCount, vaultKeyword: keyword },
         hints: [
           {
             speaker: "David Chaum",
-            text: "Cryptography matters when it becomes a tool: private enough to protect people, practical enough to use.",
+            text: "Cryptography matters when it becomes a tool: private enough to protect people, practical enough to use. Here, reuse the tools you earned.",
           },
           {
             speaker: "Archive note",
-            text: `The phrase has ${vaultPhrase.split(" ").length} words.`,
+            text: "Undo the seals in reverse order. The last method used to encrypt the vault is the first method you should decode.",
+          },
+          {
+            speaker: "Archive note",
+            text: "The outer seal is the Shift Door. After that, rebuild the Rail Table. The remaining text needs the Keyword Terminal.",
+          },
+          {
+            speaker: "Archive note",
+            text: `Use shift ${caesarShift}, ${railCount} rails, and keyword ${keyword}.`,
           },
         ],
         artifact: {
