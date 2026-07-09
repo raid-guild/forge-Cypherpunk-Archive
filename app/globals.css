@@ -242,6 +242,7 @@ h2 {
   min-width: 160px;
   display: grid;
   justify-items: center;
+  overflow: visible;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -264,35 +265,35 @@ h2 {
 
 .station-prop {
   position: relative;
-  width: 150px;
-  height: 128px;
+  width: 164px;
+  height: 142px;
   display: block;
   margin: 0 auto 7px;
 }
 
 .station-prop--caesar {
-  width: 132px;
-  height: 160px;
+  width: 148px;
+  height: 174px;
 }
 
 .station-prop--rail-fence {
-  width: 150px;
-  height: 118px;
+  width: 164px;
+  height: 128px;
 }
 
 .station-prop--vigenere {
-  width: 140px;
-  height: 128px;
+  width: 154px;
+  height: 154px;
 }
 
 .station-prop--diffie-hellman {
-  width: 150px;
-  height: 150px;
+  width: 166px;
+  height: 166px;
 }
 
 .station-prop--vault {
-  width: 146px;
-  height: 128px;
+  width: 160px;
+  height: 146px;
 }
 
 .station-prop__glow,
@@ -888,6 +889,24 @@ code {
   color: var(--green);
 }
 
+.share-result {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid rgba(105, 212, 143, 0.28);
+  border-radius: 6px;
+  padding: 12px;
+  background: rgba(105, 212, 143, 0.08);
+}
+
+.share-result pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
 .leaderboard {
   display: grid;
   gap: 8px;
@@ -1079,6 +1098,10 @@ code {
     transform: scale(0.78);
     transform-origin: center bottom;
     margin-bottom: -8px;
+  }
+
+  .share-result {
+    grid-template-columns: 1fr;
   }
 
   .modal__panel {

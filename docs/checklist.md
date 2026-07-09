@@ -106,4 +106,4 @@
 - [x] Add daily credit rule: solved and no viewed reveal.
 - [x] Add leaderboard API and UI for credited authenticated solves.
 - [x] Add streak calculation for credited daily solves.
-- [ ] Add shareable result format.
+- [x] Add shareable result format.

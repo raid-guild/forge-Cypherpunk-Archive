@@ -327,6 +327,7 @@ export default function ArchiveRoom({
         <DailyStatus
           authenticated={authenticated}
           dailyState={dailyState}
+          dailyDate={dailyDate}
           leaderboard={dailyLeaderboard}
           streak={dailyStreak}
           toolUnlocks={effectiveToolUnlocks}
@@ -388,21 +389,34 @@ function stationPropAsset(id: StationId) {
 function DailyStatus({
   authenticated,
   dailyState,
+  dailyDate,
   leaderboard,
   streak,
   toolUnlocks,
 }: {
   authenticated: boolean;
   dailyState: ArchiveRoomProps["dailyAttempt"];
+  dailyDate?: string;
   leaderboard: NonNullable<ArchiveRoomProps["leaderboard"]>;
   streak: ArchiveRoomProps["streak"];
   toolUnlocks: Partial<Record<StationId, boolean>>;
 }) {
+  const [copied, setCopied] = useState(false);
   const toolStatus = [
     { id: "caesar" as const, label: "Shift Door", station: "Caesar station" },
     { id: "rail-fence" as const, label: "Rail Table", station: "Rail station" },
     { id: "vigenere" as const, label: "Keyword Terminal", station: "Vigenere station" },
   ];
+  const shareText = formatDailyShareText(dailyDate, dailyState, toolStatus, toolUnlocks);
+
+  async function copyShareText() {
+    if (!shareText) return;
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(shareText).catch(() => null);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
 
   return (
     <section className="daily-panel" aria-label="Daily vault status">
@@ -443,6 +457,18 @@ function DailyStatus({
         ))}
       </div>
 
+      {dailyState?.solved && shareText && (
+        <div className="share-result">
+          <div>
+            <h3>Share Result</h3>
+            <pre>{shareText}</pre>
+          </div>
+          <button className="button" type="button" onClick={copyShareText}>
+            {copied ? "Copied" : "Copy result"}
+          </button>
+        </div>
+      )}
+
       {streak && (
         <div className="daily-stats">
           <span>Current streak: {streak.current}</span>
@@ -471,6 +497,28 @@ function DailyStatus({
       </div>
     </section>
   );
+}
+
+function formatDailyShareText(
+  dailyDate: string | undefined,
+  dailyState: ArchiveRoomProps["dailyAttempt"],
+  tools: Array<{ id: StationId; label: string }>,
+  toolUnlocks: Partial<Record<StationId, boolean>>
+) {
+  if (!dailyState?.solved || !dailyDate) return "";
+  const result = dailyState.credited ? "credited" : "assisted";
+  const unlockedTools = tools
+    .filter((tool) => toolUnlocks[tool.id])
+    .map((tool) => tool.label.replace(" Door", "").replace(" Table", "").replace(" Terminal", ""))
+    .join(" / ");
+
+  return [
+    `Cypherpunk Archive Daily ${dailyDate}`,
+    `Solved: ${result}`,
+    `Hints: ${dailyState.hintCount}`,
+    `Misses: ${dailyState.wrongAttempts}`,
+    `Tools: ${unlockedTools || "none unlocked"}`,
+  ].join("\n");
 }
 
 function RunSummary({
