@@ -12,8 +12,36 @@ import {
 } from "@/lib/ciphers";
 import { buildArchiveRun, type PuzzleStation, type StationId } from "@/lib/archive-data";
 
+type ArchiveMode = "archive" | "daily";
+
 interface ArchiveRoomProps {
   handle: string | null;
+  authenticated?: boolean;
+  mode?: ArchiveMode;
+  initialSeed?: string;
+  initialSolved?: Partial<Record<StationId, boolean>>;
+  toolUnlocks?: Partial<Record<StationId, boolean>>;
+  dailyDate?: string;
+  dailyAttempt?: {
+    solved: boolean;
+    viewedReveal: boolean;
+    credited: boolean;
+    hintCount: number;
+    wrongAttempts: number;
+  } | null;
+  leaderboard?: Array<{
+    handle: string;
+    picture: string | null;
+    solved_at: string;
+    hint_count: number;
+    wrong_attempts: number;
+    seconds_to_solve: number | null;
+  }>;
+  streak?: {
+    current: number;
+    longest: number;
+    total: number;
+  } | null;
 }
 
 interface SavedRunState {
@@ -31,41 +59,78 @@ interface VaultHistoryEntry {
 
 const STORAGE_KEY = "cypherpunk-archive-run-v1";
 const DEFAULT_SEED = "archive-demo";
-const dailyCipherEnabled = false;
 
-export default function ArchiveRoom({ handle }: ArchiveRoomProps) {
-  const [seed, setSeed] = useState(DEFAULT_SEED);
+export default function ArchiveRoom({
+  handle,
+  authenticated = false,
+  mode = "archive",
+  initialSeed = DEFAULT_SEED,
+  initialSolved = {},
+  toolUnlocks,
+  dailyDate,
+  dailyAttempt,
+  leaderboard = [],
+  streak,
+}: ArchiveRoomProps) {
+  const [seed, setSeed] = useState(initialSeed);
   const [activeId, setActiveId] = useState<StationId | null>(null);
   const [solved, setSolved] = useState<Record<string, boolean>>({});
+  const [localToolUnlocks, setLocalToolUnlocks] = useState<Record<string, boolean>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [hintCounts, setHintCounts] = useState<Record<string, number>>({});
+  const [dailyState, setDailyState] = useState(dailyAttempt);
 
   const run = useMemo(() => buildArchiveRun(seed), [seed]);
+  const visibleStations = mode === "daily" ? run.stations.filter((station) => station.id === "vault") : run.stations;
   const activeStation = run.stations.find((station) => station.id === activeId) ?? null;
-  const solvedCount = run.stations.filter((station) => solved[station.id]).length;
-  const runComplete = solvedCount === run.stations.length;
-  const vaultUnlocked = run.stations
-    .filter((station) => station.id !== "vault")
-    .every((station) => solved[station.id]);
+  const solvedCount = visibleStations.filter((station) => solved[station.id]).length;
+  const runComplete = solvedCount === visibleStations.length;
+  const effectiveToolUnlocks =
+    mode === "daily"
+      ? authenticated
+        ? toolUnlocks ?? {}
+        : localToolUnlocks
+      : solved;
+  const vaultUnlocked =
+    mode === "daily" ||
+    run.stations
+      .filter((station) => station.id !== "vault")
+      .every((station) => solved[station.id]);
 
   useEffect(() => {
+    if (mode === "daily") {
+      setSeed(initialSeed);
+      setSolved({ ...initialSolved });
+      setDailyState(dailyAttempt);
+      if (!authenticated) {
+        const saved = loadSavedRun();
+        setLocalToolUnlocks(saved?.solved ?? {});
+      }
+      return;
+    }
+
     const saved = loadSavedRun();
     if (saved) {
       setSeed(saved.seed);
-      setSolved(saved.solved);
+      setSolved({ ...saved.solved, ...initialSolved });
       setAnswers(saved.answers);
       setHintCounts(saved.hintCounts);
       return;
     }
 
-    const firstSeed = `archive-${new Date().toISOString().slice(0, 10)}`;
-    setSeed(firstSeed);
-  }, []);
+    setSeed(initialSeed === DEFAULT_SEED ? `archive-${new Date().toISOString().slice(0, 10)}` : initialSeed);
+    setSolved({ ...initialSolved });
+  }, [authenticated, dailyAttempt, initialSeed, mode]);
 
   useEffect(() => {
+    setSolved((current) => ({ ...current, ...initialSolved }));
+  }, [initialSolved]);
+
+  useEffect(() => {
+    if (mode === "daily") return;
     const state: SavedRunState = { seed, solved, answers, hintCounts };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [answers, hintCounts, seed, solved]);
+  }, [answers, hintCounts, mode, seed, solved]);
 
   function submitAnswer(station: PuzzleStation) {
     const answer = answers[station.id] ?? "";
@@ -78,33 +143,100 @@ export default function ArchiveRoom({ handle }: ArchiveRoomProps) {
 
     if (isCorrect) {
       setSolved((current) => ({ ...current, [station.id]: true }));
+      if (mode === "archive" && station.id !== "vault") {
+        void recordStationCompletion(station.id);
+      }
+      if (mode === "daily" && station.id === "vault") {
+        void submitDailyAnswer(answer);
+      }
+    } else if (mode === "daily" && station.id === "vault") {
+      void submitDailyAnswer(answer);
     }
   }
 
   function resetRun() {
+    if (mode === "daily") {
+      setSolved(dailyState?.solved ? { vault: true } : {});
+      setAnswers({});
+      setHintCounts({});
+      setActiveId(null);
+      return;
+    }
     const nextSeed = `archive-${Date.now().toString(36)}`;
     setSeed(nextSeed);
-    setSolved({});
+    setSolved({ ...initialSolved });
     setAnswers({});
     setHintCounts({});
     setActiveId(null);
+  }
+
+  function revealHint(station: PuzzleStation) {
+    const nextHintCount = Math.min(station.hints.length, (hintCounts[station.id] ?? 0) + 1);
+    setHintCounts((current) => ({
+      ...current,
+      [station.id]: nextHintCount,
+    }));
+
+    if (mode !== "daily" || station.id !== "vault") return;
+    void fetch("/api/daily/hint", { method: "POST" });
+    if (nextHintCount >= station.hints.length) {
+      setDailyState((current) => current ? { ...current, viewedReveal: true, credited: false } : current);
+      void fetch("/api/daily/reveal", { method: "POST" });
+    }
+  }
+
+  async function recordStationCompletion(stationId: StationId) {
+    if (!authenticated) return;
+    await fetch("/api/station-completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stationId }),
+    }).catch(() => null);
+  }
+
+  async function submitDailyAnswer(answer: string) {
+    const response = await fetch("/api/daily/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    }).catch(() => null);
+    if (!response?.ok) return;
+    const result = (await response.json()) as {
+      attempt?: {
+        solved_at: string | null;
+        viewed_reveal_at: string | null;
+        hint_count: number;
+        wrong_attempts: number;
+      };
+      credited?: boolean;
+    };
+    if (result.attempt) {
+      setDailyState({
+        solved: Boolean(result.attempt.solved_at),
+        viewedReveal: Boolean(result.attempt.viewed_reveal_at),
+        credited: Boolean(result.credited),
+        hintCount: result.attempt.hint_count,
+        wrongAttempts: result.attempt.wrong_attempts,
+      });
+    }
   }
 
   return (
     <main className="archive">
       <header className="archive__hud">
         <div>
-          <p className="eyebrow">Archive demo</p>
-          <h1>Cypherpunk Archive</h1>
+          <p className="eyebrow">{mode === "daily" ? "Shared daily vault" : "Archive demo"}</p>
+          <h1>{mode === "daily" ? "Daily Vault" : "Cypherpunk Archive"}</h1>
         </div>
         <div className="hud-panel">
           <span>{handle ? `Signed in: ${handle}` : "Anonymous run"}</span>
+          {mode === "daily" && dailyDate && <span>Daily: {dailyDate}</span>}
           <span>Seed: {run.seed}</span>
           <strong>
-            {solvedCount}/{run.stations.length} solved
+            {solvedCount}/{visibleStations.length} solved
           </strong>
           <button className="text-button" type="button" onClick={resetRun}>
-            New run
+            {mode === "daily" ? "Reset work" : "New run"}
           </button>
         </div>
       </header>
@@ -115,7 +247,7 @@ export default function ArchiveRoom({ handle }: ArchiveRoomProps) {
         <div className="room__shade" />
         <div className="room__beam room__beam--left" aria-hidden="true" />
         <div className="room__beam room__beam--right" aria-hidden="true" />
-        {run.stations.map((station) => {
+        {visibleStations.map((station) => {
           const locked = station.id === "vault" && !vaultUnlocked;
           return (
             <button
@@ -138,18 +270,21 @@ export default function ArchiveRoom({ handle }: ArchiveRoomProps) {
       </section>
 
       <aside className="artifact-strip" aria-label="Unlocked artifacts">
-        {run.stations.map((station) => (
-          <a
-            key={station.id}
-            className={solved[station.id] ? "artifact artifact--open" : "artifact"}
-            href={solved[station.id] ? station.artifact.href : undefined}
-            target="_blank"
-            rel="noreferrer"
-            aria-disabled={!solved[station.id]}
-          >
-            <span>{station.artifact.title}</span>
-          </a>
-        ))}
+        {(mode === "daily" ? run.stations.filter((station) => station.id !== "vault") : run.stations).map((station) => {
+          const artifactOpen = mode === "daily" ? Boolean(effectiveToolUnlocks[station.id]) : Boolean(solved[station.id]);
+          return (
+            <a
+              key={station.id}
+              className={artifactOpen ? "artifact artifact--open" : "artifact"}
+              href={artifactOpen ? station.artifact.href : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!artifactOpen}
+            >
+              <span>{station.artifact.title}</span>
+            </a>
+          );
+        })}
       </aside>
 
       {activeStation && (
@@ -158,26 +293,34 @@ export default function ArchiveRoom({ handle }: ArchiveRoomProps) {
           stations={run.stations}
           solved={Boolean(solved[activeStation.id])}
           solvedMap={solved}
+          toolUnlocks={effectiveToolUnlocks}
+          mode={mode}
           answer={answers[activeStation.id] ?? ""}
           hintCount={hintCounts[activeStation.id] ?? 0}
           onAnswer={(value) => setAnswers((current) => ({ ...current, [activeStation.id]: value }))}
-          onHint={() =>
-            setHintCounts((current) => ({
-              ...current,
-              [activeStation.id]: Math.min(activeStation.hints.length, (current[activeStation.id] ?? 0) + 1),
-            }))
-          }
+          onHint={() => revealHint(activeStation)}
           onSubmit={() => submitAnswer(activeStation)}
           onClose={() => setActiveId(null)}
+        />
+      )}
+
+      {mode === "daily" && (
+        <DailyStatus
+          authenticated={authenticated}
+          dailyState={dailyState}
+          leaderboard={leaderboard}
+          streak={streak}
+          toolUnlocks={effectiveToolUnlocks}
         />
       )}
 
       {runComplete && !activeStation && (
         <RunSummary
           seed={run.seed}
-          stations={run.stations}
+          stations={visibleStations}
           solvedMap={solved}
           onNewRun={resetRun}
+          mode={mode}
         />
       )}
     </main>
@@ -211,16 +354,90 @@ function stationPropAsset(id: StationId) {
   return "final-vault.png";
 }
 
+function DailyStatus({
+  authenticated,
+  dailyState,
+  leaderboard,
+  streak,
+  toolUnlocks,
+}: {
+  authenticated: boolean;
+  dailyState: ArchiveRoomProps["dailyAttempt"];
+  leaderboard: NonNullable<ArchiveRoomProps["leaderboard"]>;
+  streak: ArchiveRoomProps["streak"];
+  toolUnlocks: Partial<Record<StationId, boolean>>;
+}) {
+  const toolStatus = [
+    { id: "caesar" as const, label: "Shift Door" },
+    { id: "rail-fence" as const, label: "Rail Table" },
+    { id: "vigenere" as const, label: "Keyword Terminal" },
+  ];
+
+  return (
+    <section className="daily-panel" aria-label="Daily vault status">
+      <div>
+        <h2>Daily Status</h2>
+        <p className="muted">
+          {authenticated
+            ? dailyState?.solved
+              ? dailyState.credited
+                ? "Credited solve. Streak extended."
+                : "Solved after reveal. Completed, but no daily credit."
+              : "Solve without the full reveal for leaderboard and streak credit."
+            : "Anonymous daily play is enabled. Sign in through Portal for streaks and leaderboard credit."}
+        </p>
+      </div>
+
+      <div className="tool-unlocks">
+        {toolStatus.map((tool) => (
+          <span className={toolUnlocks[tool.id] ? "tool-unlock is-open" : "tool-unlock"} key={tool.id}>
+            {tool.label}
+          </span>
+        ))}
+      </div>
+
+      {streak && (
+        <div className="daily-stats">
+          <span>Current streak: {streak.current}</span>
+          <span>Longest: {streak.longest}</span>
+          <span>Total credited: {streak.total}</span>
+        </div>
+      )}
+
+      <div>
+        <h3>Leaderboard</h3>
+        {leaderboard.length ? (
+          <ol className="leaderboard">
+            {leaderboard.map((entry) => (
+              <li key={`${entry.handle}-${entry.solved_at}`}>
+                <span>{entry.handle}</span>
+                <small>
+                  {entry.hint_count} hints · {entry.wrong_attempts} misses
+                  {entry.seconds_to_solve !== null ? ` · ${entry.seconds_to_solve}s` : ""}
+                </small>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">No credited solves yet today.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function RunSummary({
   seed,
   stations,
   solvedMap,
   onNewRun,
+  mode,
 }: {
   seed: string;
   stations: PuzzleStation[];
   solvedMap: Record<string, boolean>;
   onNewRun: () => void;
+  mode: ArchiveMode;
 }) {
   const solvedStations = stations.filter((station) => solvedMap[station.id]);
 
@@ -262,13 +479,10 @@ function RunSummary({
 
       <div className="summary-actions">
         <button className="button button--primary" type="button" onClick={onNewRun}>
-          New run
+          {mode === "daily" ? "Reset work" : "New run"}
         </button>
-        <button className="button" type="button" disabled={!dailyCipherEnabled}>
-          Daily Cipher
-        </button>
+        {mode === "archive" && <a className="button" href="/daily">Daily Vault</a>}
       </div>
-      {!dailyCipherEnabled && <p className="summary-note">Daily Cipher is planned after the archive demo loop settles.</p>}
     </section>
   );
 }
@@ -278,6 +492,8 @@ function PuzzlePanel({
   stations,
   solved,
   solvedMap,
+  toolUnlocks,
+  mode,
   answer,
   hintCount,
   onAnswer,
@@ -289,6 +505,8 @@ function PuzzlePanel({
   stations: PuzzleStation[];
   solved: boolean;
   solvedMap: Record<string, boolean>;
+  toolUnlocks: Record<string, boolean> | Partial<Record<StationId, boolean>>;
+  mode: ArchiveMode;
   answer: string;
   hintCount: number;
   onAnswer: (value: string) => void;
@@ -323,6 +541,8 @@ function PuzzlePanel({
             station={station}
             stations={stations}
             solvedMap={solvedMap}
+            toolUnlocks={toolUnlocks}
+            mode={mode}
             solved={solved}
             onAnswer={onAnswer}
           />
@@ -372,12 +592,16 @@ function StationTool({
   station,
   stations,
   solvedMap,
+  toolUnlocks,
+  mode,
   solved,
   onAnswer,
 }: {
   station: PuzzleStation;
   stations: PuzzleStation[];
   solvedMap: Record<string, boolean>;
+  toolUnlocks: Record<string, boolean> | Partial<Record<StationId, boolean>>;
+  mode: ArchiveMode;
   solved: boolean;
   onAnswer: (value: string) => void;
 }) {
@@ -398,6 +622,8 @@ function StationTool({
       station={station}
       stations={stations}
       solvedMap={solvedMap}
+      toolUnlocks={toolUnlocks}
+      mode={mode}
       onAnswer={onAnswer}
     />
   );
@@ -701,11 +927,15 @@ function VaultTool({
   station,
   stations,
   solvedMap,
+  toolUnlocks,
+  mode,
   onAnswer,
 }: {
   station: PuzzleStation;
   stations: PuzzleStation[];
   solvedMap: Record<string, boolean>;
+  toolUnlocks: Record<string, boolean> | Partial<Record<StationId, boolean>>;
+  mode: ArchiveMode;
   onAnswer: (value: string) => void;
 }) {
   const [workText, setWorkText] = useState(station.encodedText);
@@ -721,6 +951,9 @@ function VaultTool({
   const railRows = railFenceReconstructionRows(workText, rails);
   const keywordPreview = normalizedKeyword ? vigenereDecode(workText, normalizedKeyword) : workText;
   const researchFiles = station.config.vaultResearchFiles ?? [];
+  const shiftUnlocked = mode !== "daily" || Boolean(toolUnlocks.caesar);
+  const railUnlocked = mode !== "daily" || Boolean(toolUnlocks["rail-fence"]);
+  const keywordUnlocked = mode !== "daily" || Boolean(toolUnlocks.vigenere);
 
   useEffect(() => {
     setWorkText(station.encodedText);
@@ -769,27 +1002,34 @@ function VaultTool({
         <button
           className={activeTool === "shift" ? "vault-tool-tab is-active" : "vault-tool-tab"}
           type="button"
+          disabled={!shiftUnlocked}
           onClick={() => setActiveTool("shift")}
         >
-          Shift Door
+          Shift Door{shiftUnlocked ? "" : " locked"}
         </button>
         <button
           className={activeTool === "rail" ? "vault-tool-tab is-active" : "vault-tool-tab"}
           type="button"
+          disabled={!railUnlocked}
           onClick={() => setActiveTool("rail")}
         >
-          Rail Table
+          Rail Table{railUnlocked ? "" : " locked"}
         </button>
         <button
           className={activeTool === "keyword" ? "vault-tool-tab is-active" : "vault-tool-tab"}
           type="button"
+          disabled={!keywordUnlocked}
           onClick={() => setActiveTool("keyword")}
         >
-          Keyword Terminal
+          Keyword Terminal{keywordUnlocked ? "" : " locked"}
         </button>
       </div>
 
-      {activeTool === "shift" && (
+      {mode === "daily" && (!shiftUnlocked || !railUnlocked || !keywordUnlocked) && (
+        <p className="tool-note">Solve archive stations to unlock their tools for the Daily Vault.</p>
+      )}
+
+      {activeTool === "shift" && shiftUnlocked && (
         <section className="vault-tool-dialog" aria-label="Shift Door decoder">
           <div className="vault-tool-dialog__head">
             <strong>Shift Door</strong>
@@ -815,7 +1055,7 @@ function VaultTool({
         </section>
       )}
 
-      {activeTool === "rail" && (
+      {activeTool === "rail" && railUnlocked && (
         <section className="vault-tool-dialog" aria-label="Rail Table decoder">
           <div className="vault-tool-dialog__head">
             <strong>Rail Table</strong>
@@ -848,7 +1088,7 @@ function VaultTool({
         </section>
       )}
 
-      {activeTool === "keyword" && (
+      {activeTool === "keyword" && keywordUnlocked && (
         <section className="vault-tool-dialog" aria-label="Keyword Terminal decoder">
           <div className="vault-tool-dialog__head">
             <strong>Keyword Terminal</strong>
