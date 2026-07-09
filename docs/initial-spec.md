@@ -12,7 +12,8 @@ The experience should feel like exploring a dungeon archive, but the interaction
 - Introduce cypherpunk history, values, and major contributors without turning the module into a lecture.
 - Use a consistent puzzle shell so each station feels familiar while still supporting different cipher mechanics.
 - Keep the MVP small enough to build, test, and expand.
-- Preserve a path toward replayability through curated random phrase selection and a future daily puzzle mode.
+- Preserve replayability through curated random phrase selection and a shared Daily Vault mode.
+- Give Portal-authenticated users persistent tool unlocks, daily completion credit, streaks, and leaderboard placement.
 
 ## Non-Goals for MVP
 
@@ -21,7 +22,8 @@ The experience should feel like exploring a dungeon archive, but the interaction
 - AI-generated hinting.
 - Complex cryptographic math.
 - Multiplayer.
-- Scoreboards, streaks, or timers.
+- Real-time collaboration.
+- High-stakes anti-cheat. The daily score should prove meaningful engagement, not provide tournament-grade verification.
 
 ## Core Experience
 
@@ -38,7 +40,7 @@ The MVP should use a static top-down or illustrated room with clickable hotspots
 5. Request hints if needed.
 6. Solve the puzzle.
 7. Unlock a lore artifact and update room progress.
-8. Use solved artifacts to open the final vault.
+8. Use solved stations to unlock tools for the Final/Daily Vault.
 
 ## MVP Puzzle Stations
 
@@ -77,9 +79,10 @@ The MVP should use a static top-down or illustrated room with clickable hotspots
 ### 5. Final Vault
 
 - Concept: synthesis.
-- Interaction: combine outputs or artifacts from earlier stations.
+- Interaction: a layered vault puzzle using the cipher tools learned in the stations.
 - Difficulty: medium.
 - Teaching point: cryptographic systems often combine multiple primitives and protocols.
+- Product direction: this format becomes the Daily Vault shell.
 
 ## Optional Later Stations
 
@@ -148,7 +151,7 @@ Random runs should be seedable so a puzzle can be reproduced during testing.
 
 ## Daily Puzzle Mode
 
-Daily Puzzle should be a later mode, not the first build target.
+Daily Puzzle is now a target mode after the archive training loop.
 
 Archive Demo:
 
@@ -157,14 +160,114 @@ Archive Demo:
 - Generous hints.
 - No scoring pressure.
 - Teaches one idea at a time.
+- Solving stations unlocks tools.
 
-Daily Cipher:
+Daily Vault:
 
-- One seeded challenge per day.
+- One shared seeded challenge per calendar day.
 - Reuses cipher engines from the archive.
 - Combines multiple learned mechanics.
-- Has fewer hints.
-- May track timer, hint count, streak, or shareable result.
+- Uses the Final Vault tool-tray format.
+- Can be opened by anonymous or authenticated players.
+- Authenticated players get persistent progress, streaks, and leaderboard eligibility.
+- Tools are only usable when the corresponding training station has been solved.
+- Normal hints are allowed without disqualifying credit.
+- The full/direct reveal hint can still help a player complete the daily, but it removes scoring credit for that day.
+
+The daily seed should be shared for all users, e.g. `daily-YYYY-MM-DD`. Use UTC unless Portal later defines a preferred timezone.
+
+The first implementation can generate the daily from the seed. Longer term, daily challenge definitions can be persisted so specific days can be curated, replayed, audited, or discussed.
+
+## Authentication and Progress
+
+Anonymous users:
+
+- Can play the archive training loop.
+- Can attempt the Daily Vault.
+- Store progress locally only.
+- Do not appear on leaderboards or receive streak credit.
+
+Authenticated Portal users:
+
+- Have a local module session created through the Portal handoff.
+- Persist station completions server-side.
+- Do not need to repeat solved training stations across runs/devices.
+- Unlock tools permanently by solving the corresponding station.
+- Can receive Daily Vault credit and streak progress.
+
+Training station completion should be idempotent. If an authenticated user has already solved `caesar`, `rail-fence`, or `vigenere`, the station can still be replayed, but the related daily tool should already be unlocked.
+
+## Daily Scoring
+
+Keep the first scoring model deliberately simple:
+
+- `solved`: the authenticated user submitted the correct Daily Vault answer.
+- `viewed_reveal`: the authenticated user opened the full/direct reveal hint for that day.
+
+Daily credit condition:
+
+```sql
+solved_at IS NOT NULL
+AND viewed_reveal_at IS NULL
+```
+
+Normal hints do not disqualify credit. The direct reveal is the boundary because it gives away enough information that completion no longer proves puzzle-solving.
+
+Leaderboard eligibility:
+
+- Authenticated only.
+- Daily credit condition must be true.
+- Sort by fewest normal hints, then fewer wrong attempts, then fastest completion time or earliest solve time.
+
+Streak eligibility:
+
+- Authenticated only.
+- Count consecutive daily dates where the daily credit condition is true.
+- Solving after viewing the direct reveal can be shown as completed/assisted, but does not extend the streak.
+
+## Persistence Model
+
+Use SQLite when implementing authenticated progress, Daily Vault state, leaderboard, and streaks. Keep it in the same Railway service on a persistent volume.
+
+Initial tables:
+
+```sql
+users
+  portal_user_id text primary key
+  handle text
+  picture text
+  created_at text
+  last_seen_at text
+
+station_completions
+  portal_user_id text
+  station_id text
+  completed_at text
+  primary key (portal_user_id, station_id)
+
+daily_attempts
+  portal_user_id text
+  daily_date text
+  started_at text
+  solved_at text
+  viewed_reveal_at text
+  hint_count integer default 0
+  wrong_attempts integer default 0
+  primary key (portal_user_id, daily_date)
+```
+
+Future optional table:
+
+```sql
+daily_events
+  portal_user_id text
+  daily_date text
+  event_type text
+  payload_json text
+  created_at text
+```
+
+This can support analytics, replay/debugging, and richer scoring without complicating the first implementation.
 
 ## Visual Direction
 
@@ -185,20 +288,22 @@ Daily Cipher:
 - Prefer a React component model for puzzle panels and state.
 - Use data-driven puzzle definitions.
 - Keep cipher encode/decode logic isolated and unit-testable.
-- Store progress in local state first.
-- If persistence is needed, use SQLite on a Railway persistent volume.
+- Store anonymous progress in local state first.
+- Store authenticated station completion, Daily Vault attempts, leaderboard data, and streak data in SQLite on a Railway persistent volume.
 - Avoid adding a separate database service for the MVP.
 - Avoid adapting the arcade combat loop unless movement becomes a hard requirement.
 
 ## Storage Direction
 
-The MVP should not require server-side storage unless Portal integration or daily challenge state requires it. Start with client/session state for the guided archive.
+The archive training loop can work with client/session state for anonymous users, but authenticated progress and Daily Vault scoring require server-side storage.
 
-Potential SQLite-backed data, if needed later:
+SQLite-backed data:
 
-- Daily puzzle seed and generated challenge records.
-- Player daily completion records.
-- Hint counts, completion time, and streaks.
-- Portal launch/session mapping if not fully handled upstream.
+- Authenticated user records from Portal launch/session.
+- Persistent station completion/tool unlock records.
+- Daily attempt records.
+- Direct reveal state.
+- Hint counts, wrong attempts, completion time, and streaks.
+- Optional daily challenge records if generated dailies need to become auditable or curated.
 
 SQLite should live on the Railway persistent volume so the module can remain a single deployable service.

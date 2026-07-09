@@ -11,6 +11,8 @@
 - [x] Add Portal-compatible launch callback/session surface.
 - [x] Allow anonymous local play.
 - [x] Decide exact Next.js directory structure.
+- [x] Define shared Daily Vault direction.
+- [x] Define direct reveal as the scoring disqualifier.
 - [ ] Confirm final Portal module integration requirements.
 - [ ] Audit reusable assets from `arcade-roundtable-melee`.
 - [ ] Identify missing generated assets and draft prompts using `docs/imagegen-assets.md`.
@@ -56,10 +58,26 @@
 - [x] Build Vigenere keyword widget.
 - [x] Build Diffie-Hellman altar widget.
 - [x] Build first final vault widget.
+- [x] Convert final vault into the first Daily Vault-style layered puzzle shell.
+- [x] Add generated acrostic-style hints for early vault layers.
+- [x] Add research-file keyword hints for the vault keyword layer.
+- [x] Add undo for applied vault decode steps.
 - [x] Connect each widget to shared station shell.
 - [x] Connect solve events to room visual progress.
 
-## Phase 5 - Polish and Validation
+## Phase 5 - Authenticated Progress and Persistence
+
+- [ ] Add SQLite dependency and database helper.
+- [ ] Configure `SQLITE_PATH` for Railway persistent volume.
+- [ ] Add `users` table and upsert authenticated Portal users from session.
+- [ ] Add `station_completions` table.
+- [ ] Persist authenticated station completions server-side.
+- [ ] Load authenticated station completions into archive state.
+- [ ] Treat solved stations as permanent tool unlocks for authenticated users.
+- [ ] Preserve anonymous localStorage behavior for unauthenticated users.
+- [ ] Add migration/bootstrap path for SQLite schema.
+
+## Phase 6 - Polish and Validation
 
 - [ ] Generate or finalize missing puzzle prop assets.
 - [ ] Generate or finalize missing lore/item assets.
@@ -69,16 +87,23 @@
 - [ ] Verify text fits on mobile and desktop.
 - [ ] Verify all puzzles are solvable by hand.
 - [ ] Verify hint flow does not reveal too much too early.
+- [ ] Verify direct reveal is clearly distinct from normal hints.
 - [ ] Run accessibility pass for keyboard and screen-reader basics.
 - [ ] Run browser QA on desktop and mobile viewport sizes.
 
-## Phase 6 - Future Daily Mode
+## Phase 7 - Daily Vault, Leaderboard, and Streaks
 
-- [ ] Define daily seed format.
+- [x] Define daily seed format direction: shared `daily-YYYY-MM-DD`.
 - [ ] Create daily challenge generator using existing cipher engines.
 - [ ] Add daily challenge route/view.
-- [ ] Decide whether daily challenge state needs SQLite persistence.
-- [ ] Add SQLite schema and volume path config if persistence is needed.
-- [ ] Add scoring based on hints and completion time.
+- [ ] Gate daily tools by authenticated station completions.
+- [ ] Allow anonymous Daily Vault play without leaderboard/streak credit.
+- [ ] Add `daily_attempts` table.
+- [ ] Add server-side daily answer validation.
+- [ ] Track daily `started_at`, `solved_at`, `viewed_reveal_at`, hint count, and wrong attempts.
+- [ ] Mark full/direct reveal hints with a scoring-disqualifying flag.
+- [ ] Ensure normal hints do not disqualify daily credit.
+- [ ] Add daily credit rule: solved and no viewed reveal.
+- [ ] Add leaderboard API and UI for credited authenticated solves.
+- [ ] Add streak calculation for credited daily solves.
 - [ ] Add shareable result format.
-- [ ] Add streak/progress persistence if Portal supports it.

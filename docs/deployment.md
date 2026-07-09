@@ -34,12 +34,17 @@ PORTAL_MODULE_SLUG=cypherpunk-archive
 PORTAL_MODULE_ISSUER=https://portal.raidguild.org
 APP_PUBLIC_URL=https://cypherpunk-archive-production.up.railway.app
 PORTAL_MODULES_URL=https://portal.raidguild.org/modules
+SQLITE_PATH=/data/cypherpunk-archive.sqlite
 ```
 
 `PORTAL_MODULE_ALLOWED_ISSUERS` can be used instead of `PORTAL_MODULE_ISSUER` when multiple comma-separated Portal issuers are valid.
 
 ## Storage
 
-No persistent storage is required for the current archive demo.
+Anonymous archive play can run without persistent storage.
 
-If Daily Cipher or server-side progress is added later, use SQLite on a Railway persistent volume.
+Authenticated station completions, Daily Vault attempts, leaderboard entries, and streaks should use SQLite on a Railway persistent volume. Mount the volume at `/data` and set:
+
+```text
+SQLITE_PATH=/data/cypherpunk-archive.sqlite
+```
