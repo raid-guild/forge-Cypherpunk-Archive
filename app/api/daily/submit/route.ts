@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { compactAnswer, normalizeAnswer } from "@/lib/ciphers";
-import { buildDailyRun, dailyDate } from "@/lib/daily";
+import { buildDailyChallenge, dailyDate } from "@/lib/daily";
 import { getLeaderboard, getStreak, recordDailySubmit, upsertUser } from "@/lib/db";
 import { getCurrentSession } from "@/lib/portal-session";
 
@@ -12,12 +12,8 @@ export async function POST(request: NextRequest) {
   const date = dailyDate();
   const body = (await request.json().catch(() => null)) as { answer?: string } | null;
   const answer = body?.answer ?? "";
-  const run = buildDailyRun(date);
-  const vault = run.stations.find((station) => station.id === "vault");
-
-  if (!vault) return NextResponse.json({ error: "Daily vault missing." }, { status: 500 });
-
-  const accepted = [vault.expectedAnswer, ...(vault.acceptedAnswers ?? [])];
+  const challenge = buildDailyChallenge(date);
+  const accepted = [challenge.expectedAnswer, ...challenge.acceptedAnswers];
   const correct = accepted.some(
     (acceptedAnswer) =>
       normalizeAnswer(answer) === normalizeAnswer(acceptedAnswer) ||
@@ -29,13 +25,13 @@ export async function POST(request: NextRequest) {
   }
 
   upsertUser(session);
-  const attempt = recordDailySubmit(session.portalUserID, date, correct);
+  const attempt = recordDailySubmit(session.portalUserID, date, challenge.id, correct);
   return NextResponse.json({
     authenticated: true,
     correct,
     attempt,
     credited: Boolean(attempt.solved_at && !attempt.viewed_reveal_at),
     streak: getStreak(session.portalUserID, date),
-    leaderboard: getLeaderboard(date),
+    leaderboard: getLeaderboard(challenge.id),
   });
 }

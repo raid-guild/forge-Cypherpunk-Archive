@@ -5,6 +5,7 @@ import type { LocalSession } from "@/lib/portal-session";
 import type { StationId } from "@/lib/archive-data";
 
 export interface DailyAttempt {
+  challenge_id: string;
   daily_date: string;
   started_at: string;
   solved_at: string | null;
@@ -76,85 +77,85 @@ export function recordStationCompletion(portalUserID: string, stationId: Station
     .run(portalUserID, stationId, nowIso());
 }
 
-export function getOrCreateDailyAttempt(portalUserID: string, dailyDate: string): DailyAttempt {
+export function getOrCreateDailyAttempt(portalUserID: string, dailyDate: string, challengeId: string): DailyAttempt {
   const database = getDb();
   database
     .prepare(
       `
-      insert into daily_attempts (portal_user_id, daily_date, started_at)
-      values (?, ?, ?)
-      on conflict(portal_user_id, daily_date) do nothing
+      insert into daily_challenge_attempts (portal_user_id, challenge_id, daily_date, started_at)
+      values (?, ?, ?, ?)
+      on conflict(portal_user_id, challenge_id) do nothing
     `
     )
-    .run(portalUserID, dailyDate, nowIso());
+    .run(portalUserID, challengeId, dailyDate, nowIso());
 
   return database
     .prepare(
       `
-      select daily_date, started_at, solved_at, viewed_reveal_at, hint_count, wrong_attempts
-      from daily_attempts
-      where portal_user_id = ? and daily_date = ?
+      select challenge_id, daily_date, started_at, solved_at, viewed_reveal_at, hint_count, wrong_attempts
+      from daily_challenge_attempts
+      where portal_user_id = ? and challenge_id = ?
     `
     )
-    .get(portalUserID, dailyDate) as DailyAttempt;
+    .get(portalUserID, challengeId) as DailyAttempt;
 }
 
-export function recordDailyHint(portalUserID: string, dailyDate: string) {
-  getOrCreateDailyAttempt(portalUserID, dailyDate);
+export function recordDailyHint(portalUserID: string, dailyDate: string, challengeId: string) {
+  getOrCreateDailyAttempt(portalUserID, dailyDate, challengeId);
   getDb()
     .prepare(
       `
-      update daily_attempts
+      update daily_challenge_attempts
       set hint_count = hint_count + 1
-      where portal_user_id = ? and daily_date = ? and solved_at is null
+      where portal_user_id = ? and challenge_id = ? and solved_at is null
     `
     )
-    .run(portalUserID, dailyDate);
+    .run(portalUserID, challengeId);
 }
 
-export function recordDailyReveal(portalUserID: string, dailyDate: string) {
-  getOrCreateDailyAttempt(portalUserID, dailyDate);
+export function recordDailyReveal(portalUserID: string, dailyDate: string, challengeId: string) {
+  getOrCreateDailyAttempt(portalUserID, dailyDate, challengeId);
   getDb()
     .prepare(
       `
-      update daily_attempts
+      update daily_challenge_attempts
       set viewed_reveal_at = coalesce(viewed_reveal_at, ?)
-      where portal_user_id = ? and daily_date = ?
+      where portal_user_id = ? and challenge_id = ?
     `
     )
-    .run(nowIso(), portalUserID, dailyDate);
+    .run(nowIso(), portalUserID, challengeId);
 }
 
-export function recordDailySubmit(portalUserID: string, dailyDate: string, correct: boolean) {
-  const attempt = getOrCreateDailyAttempt(portalUserID, dailyDate);
-  if (attempt.solved_at) return getOrCreateDailyAttempt(portalUserID, dailyDate);
+export function recordDailySubmit(portalUserID: string, dailyDate: string, challengeId: string, correct: boolean) {
+  const attempt = getOrCreateDailyAttempt(portalUserID, dailyDate, challengeId);
+  if (attempt.solved_at) return getOrCreateDailyAttempt(portalUserID, dailyDate, challengeId);
 
   if (correct) {
     getDb()
       .prepare(
         `
-        update daily_attempts
+        update daily_challenge_attempts
         set solved_at = ?
-        where portal_user_id = ? and daily_date = ?
+        where portal_user_id = ? and challenge_id = ?
       `
       )
-      .run(nowIso(), portalUserID, dailyDate);
+      .run(nowIso(), portalUserID, challengeId);
   } else {
     getDb()
       .prepare(
         `
-        update daily_attempts
+        update daily_challenge_attempts
         set wrong_attempts = wrong_attempts + 1
-        where portal_user_id = ? and daily_date = ?
+        where portal_user_id = ? and challenge_id = ?
       `
       )
-      .run(portalUserID, dailyDate);
+      .run(portalUserID, challengeId);
   }
 
-  return getOrCreateDailyAttempt(portalUserID, dailyDate);
+  return getOrCreateDailyAttempt(portalUserID, dailyDate, challengeId);
 }
 
-export function getLeaderboard(dailyDate: string, limit = 20): LeaderboardEntry[] {
+export function getLeaderboard(challengeId: string, limit = 20): LeaderboardEntry[] {
   return getDb()
     .prepare(
       `
@@ -165,16 +166,16 @@ export function getLeaderboard(dailyDate: string, limit = 20): LeaderboardEntry[
         a.hint_count,
         a.wrong_attempts,
         cast((julianday(a.solved_at) - julianday(a.started_at)) * 86400 as integer) as seconds_to_solve
-      from daily_attempts a
+      from daily_challenge_attempts a
       join users u on u.portal_user_id = a.portal_user_id
-      where a.daily_date = ?
+      where a.challenge_id = ?
         and a.solved_at is not null
         and a.viewed_reveal_at is null
       order by a.hint_count asc, a.wrong_attempts asc, seconds_to_solve asc, a.solved_at asc
       limit ?
     `
     )
-    .all(dailyDate, limit) as LeaderboardEntry[];
+    .all(challengeId, limit) as LeaderboardEntry[];
 }
 
 export function getStreak(portalUserID: string, today: string) {
@@ -182,14 +183,14 @@ export function getStreak(portalUserID: string, today: string) {
     getDb()
       .prepare(
         `
-        select daily_date
-        from daily_attempts
-        where portal_user_id = ?
-          and solved_at is not null
-          and viewed_reveal_at is null
+        select daily_date from daily_attempts
+        where portal_user_id = ? and solved_at is not null and viewed_reveal_at is null
+        union
+        select daily_date from daily_challenge_attempts
+        where portal_user_id = ? and solved_at is not null and viewed_reveal_at is null
       `
       )
-      .all(portalUserID)
+      .all(portalUserID, portalUserID)
       .map((row) => (row as { daily_date: string }).daily_date)
   );
 
@@ -250,6 +251,22 @@ function migrate(database: Database.Database) {
       primary key (portal_user_id, daily_date),
       foreign key (portal_user_id) references users(portal_user_id)
     );
+
+    create table if not exists daily_challenge_attempts (
+      portal_user_id text not null,
+      challenge_id text not null,
+      daily_date text not null,
+      started_at text not null,
+      solved_at text,
+      viewed_reveal_at text,
+      hint_count integer not null default 0,
+      wrong_attempts integer not null default 0,
+      primary key (portal_user_id, challenge_id),
+      foreign key (portal_user_id) references users(portal_user_id)
+    );
+
+    create index if not exists daily_challenge_attempts_date
+      on daily_challenge_attempts(daily_date);
   `);
 }
 

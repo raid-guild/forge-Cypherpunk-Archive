@@ -1,4 +1,4 @@
-import { dailyDate, dailySeed } from "@/lib/daily";
+import { buildDailyChallenge, dailyDate } from "@/lib/daily";
 import {
   getLeaderboard,
   getOrCreateDailyAttempt,
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 export default async function DailyPage() {
   const session = await getCurrentSession();
   const date = dailyDate();
-  const seed = dailySeed(date);
-  const leaderboard = getLeaderboard(date);
+  const challenge = buildDailyChallenge(date);
+  const leaderboard = getLeaderboard(challenge.id);
   let toolUnlocks: Partial<Record<StationId, boolean>> = {};
   let dailyAttempt = null;
   let streak = null;
@@ -24,7 +24,7 @@ export default async function DailyPage() {
   if (session.authenticated) {
     upsertUser(session);
     toolUnlocks = Object.fromEntries(getStationCompletions(session.portalUserID).map((stationId) => [stationId, true]));
-    dailyAttempt = getOrCreateDailyAttempt(session.portalUserID, date);
+    dailyAttempt = getOrCreateDailyAttempt(session.portalUserID, date, challenge.id);
     streak = getStreak(session.portalUserID, date);
   }
 
@@ -33,7 +33,7 @@ export default async function DailyPage() {
       mode="daily"
       handle={session.authenticated ? session.handle : null}
       authenticated={session.authenticated}
-      initialSeed={seed}
+      initialSeed={challenge.seed}
       dailyDate={date}
       toolUnlocks={toolUnlocks}
       initialSolved={dailyAttempt?.solved_at ? { vault: true } : {}}

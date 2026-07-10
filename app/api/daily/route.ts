@@ -16,7 +16,7 @@ export async function GET() {
   const session = await getCurrentSession();
   const date = dailyDate();
   const challenge = buildDailyChallenge(date);
-  const leaderboard = getLeaderboard(date);
+  const leaderboard = getLeaderboard(challenge.id);
   const challengeMeta = {
     challengeId: challenge.id,
     difficulty: challenge.difficulty,
@@ -36,7 +36,7 @@ export async function GET() {
   }
 
   upsertUser(session);
-  const attempt = getOrCreateDailyAttempt(session.portalUserID, date);
+  const attempt = getOrCreateDailyAttempt(session.portalUserID, date, challenge.id);
   return NextResponse.json({
     authenticated: true,
     dailyDate: date,

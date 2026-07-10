@@ -125,7 +125,7 @@
 - [x] Generate medium challenges with seeded permutations of Caesar, Rail Fence, and Vigenere.
 - [x] Replace fixed-order vault hints with per-layer hint ladders.
 - [ ] Persist generated definitions in a `daily_challenges` table.
-- [ ] Associate attempts and leaderboard entries with a challenge ID and difficulty.
+- [x] Associate attempts and leaderboard entries with a challenge ID and difficulty.
 - [x] Add seeded generator tests for order, reproducibility, and solvability.
 - [ ] Add generator tests for tier length bounds and tool output limits.
 - [x] Chunk long Vigenere and Rail Fence visualizations into readable fixed windows.
