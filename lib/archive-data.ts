@@ -19,12 +19,18 @@ export interface VaultResearchFile {
   href: string;
 }
 
+export interface VaultLayer {
+  id: string;
+  tool: "caesar" | "rail-fence" | "vigenere";
+  params: Record<string, string | number>;
+}
+
 export interface PuzzleStation {
   id: StationId;
   title: string;
   subtitle: string;
   act: "intro" | "keys" | "vault";
-  difficulty: "easy" | "medium";
+  difficulty: "easy" | "medium" | "hard";
   guide: string;
   hotspot: { x: number; y: number };
   prompt: string;
@@ -50,6 +56,8 @@ export interface PuzzleStation {
     vaultRails?: number;
     vaultKeyword?: string;
     vaultResearchFiles?: VaultResearchFile[];
+    vaultLayers?: VaultLayer[];
+    dailyDifficulty?: "easy" | "medium" | "hard";
   };
 }
 

@@ -22,9 +22,14 @@
 - [ ] Draft 8-12 Caesar / ROT13 phrases.
 - [ ] Draft 8-12 Rail Fence phrases.
 - [ ] Draft 8-12 Vigenere phrases.
+- [ ] Replace bare phrase strings with tier, theme, figure, and source metadata.
+- [ ] Draft at least 12 medium phrases in the 35-65 letter range.
+- [ ] Draft at least 8 hard phrases in the 55-90 letter range.
+- [ ] Draft a separate short phrase bank for symbol-expanding tools such as Morse and Pigpen.
 - [ ] Draft 5-8 Diffie-Hellman puzzle setups.
 - [ ] Draft 3-5 final vault combinations.
 - [ ] Draft short lore artifacts for Diffie, Hellman, Merkle, Finney, Cohen, Gilmore, and Chaum.
+- [ ] Add artifacts and clue hooks for Hughes, May, Milhon, Zimmermann, Back, Dwork, Naor, Dai, Szabo, and Sassaman.
 - [ ] Collect approved external resource links for each figure/concept.
 - [ ] Write hint tiers for each MVP station.
 
@@ -107,3 +112,24 @@
 - [x] Add leaderboard API and UI for credited authenticated solves.
 - [x] Add streak calculation for credited daily solves.
 - [x] Add shareable result format.
+
+## Phase 8 - Daily Difficulty and Extensible Tools
+
+- [x] Specify easy, medium, and hard daily challenge tiers.
+- [x] Specify a predictable weekly difficulty cadence.
+- [x] Rank candidate advanced stations and tools.
+- [x] Add a versioned `DailyChallenge` and ordered `VaultLayer` model.
+- [ ] Separate the public daily challenge payload from hidden solution data.
+- [x] Add generator validation that decodes every generated pipeline back to its answer.
+- [ ] Refactor vault tools into a registry with unlock and alphabet compatibility metadata.
+- [x] Generate medium challenges with seeded permutations of Caesar, Rail Fence, and Vigenere.
+- [x] Replace fixed-order vault hints with per-layer hint ladders.
+- [ ] Persist generated definitions in a `daily_challenges` table.
+- [ ] Associate attempts and leaderboard entries with a challenge ID and difficulty.
+- [x] Add seeded generator tests for order, reproducibility, and solvability.
+- [ ] Add generator tests for tier length bounds and tool output limits.
+- [x] Chunk long Vigenere and Rail Fence visualizations into readable fixed windows.
+- [ ] Playtest medium challenges before adding repeated tools or a fourth layer.
+- [ ] Build the Atbash training station and tool.
+- [ ] Build the Morse signal training station with visual and non-audio fallback.
+- [ ] Enable hard weekend challenges only after their required training tool is available.

@@ -11,6 +11,7 @@ import {
   vigenereDecode,
 } from "@/lib/ciphers";
 import { buildArchiveRun, type PuzzleStation, type StationId } from "@/lib/archive-data";
+import { buildDailyRun } from "@/lib/daily";
 
 type ArchiveMode = "archive" | "daily";
 
@@ -102,7 +103,10 @@ export default function ArchiveRoom({
   const [dailyLeaderboard, setDailyLeaderboard] = useState(leaderboard);
   const [dailyStreak, setDailyStreak] = useState(streak);
 
-  const run = useMemo(() => buildArchiveRun(seed), [seed]);
+  const run = useMemo(
+    () => (mode === "daily" && dailyDate ? buildDailyRun(dailyDate) : buildArchiveRun(seed)),
+    [dailyDate, mode, seed]
+  );
   const visibleStations = mode === "daily" ? run.stations.filter((station) => station.id === "vault") : run.stations;
   const activeStation = run.stations.find((station) => station.id === activeId) ?? null;
   const solvedCount = visibleStations.filter((station) => solved[station.id]).length;
@@ -251,7 +255,9 @@ export default function ArchiveRoom({
         </div>
         <div className="hud-panel">
           <span>{handle ? `Signed in: ${handle}` : "Anonymous run"}</span>
-          {mode === "daily" && dailyDate && <span>Daily: {dailyDate}</span>}
+          {mode === "daily" && dailyDate && (
+            <span>Daily: {dailyDate} · {visibleStations[0]?.difficulty ?? "medium"}</span>
+          )}
           <span>Seed: {run.seed}</span>
           <strong>
             {solvedCount}/{visibleStations.length} solved
@@ -1041,12 +1047,20 @@ function VaultTool({
   const [rails, setRails] = useState(3);
   const [keyword, setKeyword] = useState("");
   const [history, setHistory] = useState<VaultHistoryEntry[]>([]);
+  const [railPage, setRailPage] = useState(0);
+  const [keywordPage, setKeywordPage] = useState(0);
   const railOptions = [2, 3, 4, 5];
+  const pageSize = 16;
   const normalizedKeyword = compactAnswer(keyword).replace(/[^A-Z]/g, "");
   const shiftPreview = caesarDecode(workText, shift);
   const railPreview = railFenceDecode(workText, rails);
   const railRows = railFenceReconstructionRows(workText, rails);
+  const railPageCount = Math.max(1, Math.ceil((railRows[0]?.length ?? 0) / pageSize));
+  const visibleRailRows = railRows.map((row) => row.slice(railPage * pageSize, (railPage + 1) * pageSize));
   const keywordPreview = normalizedKeyword ? vigenereDecode(workText, normalizedKeyword) : workText;
+  const keywordTiles = normalizedKeyword ? vigenereTiles(workText, normalizedKeyword) : [];
+  const keywordPageCount = Math.max(1, Math.ceil(keywordTiles.length / pageSize));
+  const visibleKeywordTiles = keywordTiles.slice(keywordPage * pageSize, (keywordPage + 1) * pageSize);
   const researchFiles = station.config.vaultResearchFiles ?? [];
   const shiftUnlocked = mode !== "daily" || Boolean(toolUnlocks.caesar);
   const railUnlocked = mode !== "daily" || Boolean(toolUnlocks["rail-fence"]);
@@ -1059,11 +1073,15 @@ function VaultTool({
     setRails(3);
     setKeyword("");
     setHistory([]);
+    setRailPage(0);
+    setKeywordPage(0);
   }, [station]);
 
   function applyStep(label: string, nextText: string) {
     setHistory((current) => [{ label, before: workText, after: nextText }, ...current].slice(0, 6));
     setWorkText(nextText);
+    setRailPage(0);
+    setKeywordPage(0);
   }
 
   function undoStep() {
@@ -1071,11 +1089,15 @@ function VaultTool({
     if (!lastStep) return;
     setWorkText(lastStep.before);
     setHistory((current) => current.slice(1));
+    setRailPage(0);
+    setKeywordPage(0);
   }
 
   function resetWorkbench() {
     setWorkText(station.encodedText);
     setHistory([]);
+    setRailPage(0);
+    setKeywordPage(0);
   }
 
   return (
@@ -1171,10 +1193,21 @@ function VaultTool({
             ))}
           </div>
           <div className="rail-table" aria-label="Vault rail reconstruction">
-            {railRows.map((row, rowIndex) => (
+            {visibleRailRows.map((row, rowIndex) => (
               <code key={rowIndex}>{row.map((char) => char || ".").join(" ")}</code>
             ))}
           </div>
+          {railPageCount > 1 && (
+            <div className="tool-pager" aria-label="Rail reconstruction pages">
+              <button className="button" type="button" disabled={railPage === 0} onClick={() => setRailPage((page) => page - 1)}>
+                Previous
+              </button>
+              <span>{railPage + 1} / {railPageCount}</span>
+              <button className="button" type="button" disabled={railPage + 1 >= railPageCount} onClick={() => setRailPage((page) => page + 1)}>
+                Next
+              </button>
+            </div>
+          )}
           <div className="preview-line">
             <span>Zigzag readout</span>
             <code>{railPreview}</code>
@@ -1213,8 +1246,8 @@ function VaultTool({
           </div>
           {normalizedKeyword && (
             <div className="vigenere-machine" aria-label="Vault Vigenere letter machine">
-              {vigenereTiles(workText, normalizedKeyword).map((tile, index) => (
-                <div className={tile.key ? "vigenere-tile is-active" : "vigenere-tile"} key={`${tile.cipher}-${index}`}>
+              {visibleKeywordTiles.map((tile, index) => (
+                <div className={tile.key ? "vigenere-tile is-active" : "vigenere-tile"} key={`${tile.cipher}-${keywordPage}-${index}`}>
                   <span>C</span>
                   <strong>{tile.cipher}</strong>
                   <span>K</span>
@@ -1223,6 +1256,17 @@ function VaultTool({
                   <strong>{tile.plain || "."}</strong>
                 </div>
               ))}
+            </div>
+          )}
+          {normalizedKeyword && keywordPageCount > 1 && (
+            <div className="tool-pager" aria-label="Keyword strip pages">
+              <button className="button" type="button" disabled={keywordPage === 0} onClick={() => setKeywordPage((page) => page - 1)}>
+                Previous
+              </button>
+              <span>{keywordPage + 1} / {keywordPageCount}</span>
+              <button className="button" type="button" disabled={keywordPage + 1 >= keywordPageCount} onClick={() => setKeywordPage((page) => page + 1)}>
+                Next
+              </button>
             </div>
           )}
           <button
